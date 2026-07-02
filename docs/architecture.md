@@ -42,8 +42,9 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/alignment.ts`: optional OpenAI Whisper word-timing artifact writer.
 - `src/tts/`: provider interface and OpenAI implementation.
 - `src/library.ts`: durable manifest writer.
-- `src/reader.ts`: library and article-page renderer with local
-  playback-position storage, plus the RSS backlog page.
+- `src/progress.ts`: single-user durable playback-position store.
+- `src/reader.ts`: library and article-page renderer with server-backed
+  playback-position sync, plus the RSS backlog page.
 
 ## Backlog
 
@@ -54,6 +55,15 @@ manifest, and marks in-flight conversions from service memory. Posting to
 the existing `accept` workflow in the background, so the browser request returns
 quickly and completion/failure still comes through the normal phone
 notifications.
+
+## Playback Progress
+
+The reader stores playback position in `<library>/progress.json` through
+`GET /progress/<slug>` and `PUT /progress/<slug>`. The file is currently
+single-user under a `default` profile so progress follows the user across
+browsers and devices. The shape leaves room to replace `default` with an SSO
+user ID later. Browser `localStorage` remains a fallback if the server request
+fails.
 
 ## Alignment Prototype
 

@@ -107,6 +107,7 @@ The reader serves:
 - `/backlog` for recent RSS articles that have not been converted yet, with
   search, pagination, and async conversion buttons.
 - `/article/<slug>` for a dedicated article page with audio and full text.
+- `/progress/<slug>` for cross-device playback position.
 - `/audio/<slug>.mp3`, `/images/<slug>.<ext>`, and optional
   `/alignment/<slug>.json` assets.
 

@@ -99,9 +99,52 @@ export function renderReaderHtml(): string {
   <script>
     const root = document.getElementById("library");
     const keyFor = (slug) => "pirate-radio-position:" + slug;
+    const progressTimers = new Map();
 
     function text(value) {
       return value == null ? "" : String(value);
+    }
+
+    function applySavedProgress(audio, value) {
+      const saved = Number(value || 0);
+      if (Number.isFinite(saved) && saved > 0 && saved < audio.duration) {
+        audio.currentTime = saved;
+        return true;
+      }
+      return false;
+    }
+
+    async function restoreProgress(slug, audio) {
+      try {
+        const response = await fetch("/progress/" + encodeURIComponent(slug), { cache: "no-store" });
+        if (response.ok) {
+          const progress = await response.json();
+          if (applySavedProgress(audio, progress.positionSeconds)) return;
+        }
+      } catch {}
+      applySavedProgress(audio, localStorage.getItem(keyFor(slug)));
+    }
+
+    function saveProgress(slug, audio, immediate = false) {
+      if (!Number.isFinite(audio.currentTime)) return;
+      localStorage.setItem(keyFor(slug), String(audio.currentTime));
+      clearTimeout(progressTimers.get(slug));
+      const write = () => {
+        fetch("/progress/" + encodeURIComponent(slug), {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          keepalive: immediate,
+          body: JSON.stringify({
+            positionSeconds: audio.currentTime,
+            durationSeconds: Number.isFinite(audio.duration) ? audio.duration : undefined,
+          }),
+        }).catch(() => {});
+      };
+      if (immediate) {
+        write();
+      } else {
+        progressTimers.set(slug, setTimeout(write, 2500));
+      }
     }
 
     async function loadLibrary() {
@@ -157,13 +200,11 @@ export function renderReaderHtml(): string {
         audio.controls = true;
         audio.preload = "metadata";
         audio.src = item.audioUrl;
-        audio.addEventListener("loadedmetadata", () => {
-          const saved = Number(localStorage.getItem(keyFor(item.slug)) || 0);
-          if (Number.isFinite(saved) && saved > 0 && saved < audio.duration) audio.currentTime = saved;
-        });
-        audio.addEventListener("timeupdate", () => {
-          localStorage.setItem(keyFor(item.slug), String(audio.currentTime));
-        });
+        audio.addEventListener("loadedmetadata", () => restoreProgress(item.slug, audio));
+        audio.addEventListener("timeupdate", () => saveProgress(item.slug, audio));
+        audio.addEventListener("pause", () => saveProgress(item.slug, audio, true));
+        audio.addEventListener("ended", () => saveProgress(item.slug, audio, true));
+        window.addEventListener("pagehide", () => saveProgress(item.slug, audio, true));
         actions.append(readLink, downloadLink);
         content.append(heading, meta);
         if (item.tagline) content.append(tagline);
@@ -369,14 +410,56 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
   <script>
     const slug = ${JSON.stringify(item.slug)};
     const keyFor = (slug) => "pirate-radio-position:" + slug;
+    let progressTimer;
     const audio = document.getElementById("article-audio");
-    audio.addEventListener("loadedmetadata", () => {
-      const saved = Number(localStorage.getItem(keyFor(slug)) || 0);
-      if (Number.isFinite(saved) && saved > 0 && saved < audio.duration) audio.currentTime = saved;
-    });
-    audio.addEventListener("timeupdate", () => {
+
+    function applySavedProgress(audio, value) {
+      const saved = Number(value || 0);
+      if (Number.isFinite(saved) && saved > 0 && saved < audio.duration) {
+        audio.currentTime = saved;
+        return true;
+      }
+      return false;
+    }
+
+    async function restoreProgress(slug, audio) {
+      try {
+        const response = await fetch("/progress/" + encodeURIComponent(slug), { cache: "no-store" });
+        if (response.ok) {
+          const progress = await response.json();
+          if (applySavedProgress(audio, progress.positionSeconds)) return;
+        }
+      } catch {}
+      applySavedProgress(audio, localStorage.getItem(keyFor(slug)));
+    }
+
+    function saveProgress(slug, audio, immediate = false) {
+      if (!Number.isFinite(audio.currentTime)) return;
       localStorage.setItem(keyFor(slug), String(audio.currentTime));
-    });
+      clearTimeout(progressTimer);
+      const write = () => {
+        fetch("/progress/" + encodeURIComponent(slug), {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          keepalive: immediate,
+          body: JSON.stringify({
+            positionSeconds: audio.currentTime,
+            durationSeconds: Number.isFinite(audio.duration) ? audio.duration : undefined,
+          }),
+        }).catch(() => {});
+      };
+      if (immediate) {
+        write();
+      } else {
+        progressTimer = setTimeout(write, 2500);
+      }
+    }
+
+    audio.addEventListener("loadedmetadata", () => restoreProgress(slug, audio));
+    audio.addEventListener("timeupdate", () => saveProgress(slug, audio));
+    audio.addEventListener("pause", () => saveProgress(slug, audio, true));
+    audio.addEventListener("ended", () => saveProgress(slug, audio, true));
+    window.addEventListener("pagehide", () => saveProgress(slug, audio, true));
     ${item.hasAlignment && item.alignmentUrl ? renderAlignmentScript(item.alignmentUrl) : ""}
   </script>
 </body>

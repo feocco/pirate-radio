@@ -19,6 +19,7 @@ import {
   type PirateRadioDecision,
 } from "./notifications.js";
 import { HomelabFunctionsNotifier, type Notifier } from "./notifier.js";
+import { readPlaybackProgress, writePlaybackProgress } from "./progress.js";
 import { renderAdminHtml, renderArticleHtml, renderBacklogHtml, renderReaderHtml } from "./reader.js";
 import { readState, seenArticleIds, writeState, type PirateRadioState } from "./state.js";
 import { createTtsProvider } from "./tts/index.js";
@@ -177,6 +178,27 @@ export class PirateRadioService {
     }
     if (request.method === "GET" && url.pathname.startsWith("/article/")) {
       await renderArticle(response, this.options.config.libraryDir, decodeURIComponent(url.pathname));
+      return;
+    }
+    if (request.method === "GET" && url.pathname.startsWith("/progress/")) {
+      const slug = decodeURIComponent(url.pathname.slice("/progress/".length));
+      const progress = await readPlaybackProgress(this.options.config.libraryDir, slug);
+      json(response, progress ? 200 : 404, progress ?? { error: "progress_not_found" });
+      return;
+    }
+    if (request.method === "PUT" && url.pathname.startsWith("/progress/")) {
+      const slug = decodeURIComponent(url.pathname.slice("/progress/".length));
+      try {
+        const body = await readJsonBody(request);
+        const progress = await writePlaybackProgress(this.options.config.libraryDir, slug, {
+          positionSeconds: Number(body.positionSeconds),
+          durationSeconds:
+            body.durationSeconds == null ? undefined : Number(body.durationSeconds),
+        });
+        json(response, 200, progress);
+      } catch {
+        json(response, 400, { error: "bad_progress" });
+      }
       return;
     }
     if (request.method === "GET" && url.pathname === "/library.json") {
@@ -430,4 +452,15 @@ function json(response: ServerResponse, status: number, body: unknown): void {
 function html(response: ServerResponse, body: string): void {
   response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
   response.end(body);
+}
+
+async function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>> {
+  let body = "";
+  for await (const chunk of request) {
+    body += chunk;
+    if (body.length > 4096) {
+      throw new Error("Request body too large");
+    }
+  }
+  return JSON.parse(body || "{}") as Record<string, unknown>;
 }
