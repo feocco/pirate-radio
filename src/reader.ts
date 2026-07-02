@@ -43,6 +43,12 @@ const sharedCss = `
   .toggle { display: flex; align-items: center; gap: 8px; font-weight: 900; }
   .pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 22px 0 64px; }
   .backlog-summary { color: var(--muted); font-weight: 900; }
+  .backlog-list { display: grid; gap: 0; margin: 22px auto 42px; border-top: 2px solid var(--line); }
+  .backlog-row { display: grid; grid-template-columns: 1fr auto; gap: 18px; padding: 15px 0; border-bottom: 1px solid #777; align-items: center; }
+  .backlog-row h2 { font-size: clamp(22px, 3vw, 34px); font-weight: 950; line-height: 1.02; }
+  .backlog-row .meta { margin: 5px 0 0; }
+  .backlog-row .tagline { margin: 7px 0 0; font-size: 16px; max-width: 860px; color: #222; }
+  .backlog-row .actions { justify-content: flex-end; margin-top: 0; min-width: 190px; }
   .article-shell { width: min(1040px, calc(100vw - 32px)); margin: 0 auto; padding-bottom: 70px; }
   .article-hero { padding: 62px 0 26px; text-align: center; }
   .article-hero h1 { margin: 0 auto; }
@@ -62,6 +68,8 @@ const sharedCss = `
     .topbar div { border-right: 0; border-bottom: 1px solid #666; }
     .brandbar { padding: 14px 16px; }
     .item { grid-template-columns: 1fr; }
+    .backlog-row { grid-template-columns: 1fr; }
+    .backlog-row .actions { justify-content: flex-start; min-width: 0; }
     .article-meta { display: block; }
     .article-meta div + div { margin-top: 8px; }
   }
@@ -190,7 +198,7 @@ export function renderBacklogHtml(): string {
     <label class="toggle"><input id="show-all" type="checkbox"> All recent</label>
     <div id="summary" class="backlog-summary"></div>
   </section>
-  <main id="backlog" class="library wrap">Loading...</main>
+  <main id="backlog" class="backlog-list wrap">Loading...</main>
   <nav class="pager wrap" aria-label="Backlog pages">
     <button id="prev" class="button" type="button">Previous</button>
     <span id="page"></span>
@@ -239,10 +247,7 @@ export function renderBacklogHtml(): string {
       }
       for (const item of pageItems) {
         const section = document.createElement("section");
-        section.className = "item";
-        const placeholder = document.createElement("div");
-        placeholder.className = "thumb placeholder";
-        placeholder.textContent = "PW";
+        section.className = "backlog-row";
         const content = document.createElement("div");
         const heading = document.createElement("h2");
         heading.textContent = item.title;
@@ -275,8 +280,7 @@ export function renderBacklogHtml(): string {
         actions.append(source);
         content.append(heading, meta);
         if (item.description) content.append(description);
-        content.append(actions);
-        section.append(placeholder, content);
+        section.append(content, actions);
         root.append(section);
       }
     }

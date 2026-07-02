@@ -25,10 +25,13 @@ describe("reader page", () => {
 
     expect(html).toContain("/backlog.json");
     expect(html).toContain("/backlog/convert/");
+    expect(html).toContain("backlog-list");
+    expect(html).toContain("backlog-row");
     expect(html).toContain("All recent");
     expect(html).toContain("Search");
     expect(html).toContain("Convert");
     expect(html).toContain("pageSize = 10");
+    expect(html).not.toContain('placeholder.textContent = "PW"');
   });
 
   test("renders a dedicated article page with image, audio, text blocks, and optional alignment", () => {
