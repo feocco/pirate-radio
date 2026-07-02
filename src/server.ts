@@ -19,7 +19,7 @@ import {
   type PirateRadioDecision,
 } from "./notifications.js";
 import { HomelabFunctionsNotifier, type Notifier } from "./notifier.js";
-import { renderArticleHtml, renderBacklogHtml, renderReaderHtml } from "./reader.js";
+import { renderAdminHtml, renderArticleHtml, renderBacklogHtml, renderReaderHtml } from "./reader.js";
 import { readState, seenArticleIds, writeState, type PirateRadioState } from "./state.js";
 import { createTtsProvider } from "./tts/index.js";
 import { handleArticleDecision, providerSynthesizer, refreshLibraryArticle } from "./workflow.js";
@@ -137,6 +137,10 @@ export class PirateRadioService {
     }
     if (request.method === "GET" && url.pathname === "/backlog") {
       html(response, renderBacklogHtml());
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/admin") {
+      html(response, renderAdminHtml());
       return;
     }
     if (request.method === "GET" && url.pathname === "/backlog.json") {

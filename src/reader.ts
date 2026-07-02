@@ -15,8 +15,8 @@ const sharedCss = `
   body { margin: 0; color: var(--ink); background: var(--paper); line-height: 1.35; }
   a { color: inherit; }
   .topbar { display: grid; grid-template-columns: 1fr 1fr 1fr; border-bottom: 1px solid var(--line); background: #000; color: #fff; }
-  .topbar div { padding: 12px 18px; border-right: 1px solid #666; font-weight: 800; }
-  .topbar div:nth-child(2) { background: var(--accent); color: #000; }
+  .topbar a { display: block; padding: 12px 18px; border-right: 1px solid #666; font-weight: 800; text-decoration: underline; }
+  .topbar a.active { background: var(--accent); color: #000; }
   .brandbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 28px; background: var(--accent); border-bottom: 1px solid var(--line); font-weight: 900; }
   .brand { display: flex; align-items: center; gap: 16px; font-size: 24px; }
   .mark { font-size: 42px; letter-spacing: -2px; line-height: .8; }
@@ -63,14 +63,18 @@ const sharedCss = `
   .body ul { margin: 0 0 30px; padding-left: 34px; }
   .word.current { background: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
   .empty { padding: 40px 0; font-size: 22px; font-weight: 800; }
+  .admin-grid { display: grid; gap: 14px; margin: 28px auto 60px; border-top: 2px solid var(--line); }
+  .admin-row { display: grid; grid-template-columns: 190px 1fr; gap: 18px; padding: 18px 0; border-bottom: 1px solid #777; align-items: center; }
+  .admin-label { font-weight: 950; }
+  .admin-value { font-weight: 800; color: #222; }
   @media (max-width: 760px) {
     .topbar { grid-template-columns: 1fr; }
-    .topbar div { border-right: 0; border-bottom: 1px solid #666; }
+    .topbar a { border-right: 0; border-bottom: 1px solid #666; }
     .brandbar { padding: 14px 16px; }
     .item { grid-template-columns: 1fr; }
     .backlog-row { grid-template-columns: 1fr; }
     .backlog-row .actions { justify-content: flex-start; min-width: 0; }
-    .article-meta { display: block; }
+    .article-meta, .admin-row { display: block; }
     .article-meta div + div { margin-top: 8px; }
   }
 `;
@@ -85,7 +89,7 @@ export function renderReaderHtml(): string {
   <style>${sharedCss}</style>
 </head>
 <body>
-  ${renderChrome()}
+  ${renderChrome("library")}
   <section class="hero wrap">
     <div class="kicker">Audio dispatches</div>
     <h1>Pirate Radio</h1>
@@ -187,7 +191,7 @@ export function renderBacklogHtml(): string {
   <style>${sharedCss}</style>
 </head>
 <body>
-  ${renderChrome()}
+  ${renderChrome("backlog")}
   <section class="hero wrap">
     <div class="kicker">Recent RSS</div>
     <h1>Backlog</h1>
@@ -341,7 +345,7 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
   <style>${sharedCss}</style>
 </head>
 <body>
-  ${renderChrome()}
+  ${renderChrome("library")}
   <article class="article-shell">
     <header class="article-hero">
       <div class="kicker">Pirate Wires</div>
@@ -379,8 +383,61 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
 </html>`;
 }
 
-function renderChrome(): string {
-  return `<nav class="topbar"><div><a href="/">Pirate Wires</a></div><div><a href="/backlog">Backlog</a></div><div>Culture</div></nav>
+export function renderAdminHtml(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin - Pirate Radio</title>
+  <style>${sharedCss}</style>
+</head>
+<body>
+  ${renderChrome("admin")}
+  <section class="hero wrap">
+    <div class="kicker">Service status</div>
+    <h1>Admin</h1>
+    <p class="deck">Basic runtime checks for the private Pirate Radio service.</p>
+  </section>
+  <main class="admin-grid wrap">
+    <section class="admin-row">
+      <div class="admin-label">Health</div>
+      <div id="health" class="admin-value">Checking...</div>
+    </section>
+    <section class="admin-row">
+      <div class="admin-label">Library</div>
+      <div><a class="readlink" href="/library.json">Open JSON</a></div>
+    </section>
+    <section class="admin-row">
+      <div class="admin-label">Backlog</div>
+      <div><a class="readlink" href="/backlog.json">Open JSON</a></div>
+    </section>
+  </main>
+  <script>
+    const health = document.getElementById("health");
+    fetch("/health", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Health check failed")))
+      .then((payload) => { health.textContent = payload.ok ? "OK" : "Unexpected response"; })
+      .catch((error) => { health.textContent = error.message; });
+  </script>
+</body>
+</html>`;
+}
+
+type ActivePage = "library" | "backlog" | "admin";
+
+function renderChrome(activePage: ActivePage): string {
+  const items = [
+    { page: "library", href: "/", label: "Pirate Wires" },
+    { page: "backlog", href: "/backlog", label: "Backlog" },
+    { page: "admin", href: "/admin", label: "Admin" },
+  ] as const;
+  return `<nav class="topbar">${items
+    .map(
+      (item) =>
+        `<a class="${item.page === activePage ? "active" : ""}" href="${item.href}">${item.label}</a>`,
+    )
+    .join("")}</nav>
   <div class="brandbar"><div class="brand"><span class="mark">PW</span><span>Pirate Radio</span></div><div>AI-generated audio</div></div>`;
 }
 

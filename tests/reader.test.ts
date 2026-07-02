@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { renderArticleHtml, renderBacklogHtml, renderReaderHtml } from "../src/reader.js";
+import {
+  renderAdminHtml,
+  renderArticleHtml,
+  renderBacklogHtml,
+  renderReaderHtml,
+} from "../src/reader.js";
 import type { LibraryItem } from "../src/library.js";
 import type { Story } from "../src/types.js";
 
@@ -18,6 +23,9 @@ describe("reader page", () => {
     expect(html).toContain("Download MP3");
     expect(html).toContain("Pirate Wires");
     expect(html).toContain('href="/backlog"');
+    expect(html).toContain('href="/admin"');
+    expect(html).toContain('<a class="active" href="/">Pirate Wires</a>');
+    expect(html).not.toContain("Culture");
   });
 
   test("renders a backlog page with search, pagination, and convert controls", () => {
@@ -32,6 +40,18 @@ describe("reader page", () => {
     expect(html).toContain("Convert");
     expect(html).toContain("pageSize = 10");
     expect(html).not.toContain('placeholder.textContent = "PW"');
+    expect(html).toContain('<a class="active" href="/backlog">Backlog</a>');
+  });
+
+  test("renders an admin page with the admin nav tab active", () => {
+    const html = renderAdminHtml();
+
+    expect(html).toContain("<h1>Admin</h1>");
+    expect(html).toContain("/health");
+    expect(html).toContain("/library.json");
+    expect(html).toContain("/backlog.json");
+    expect(html).toContain('<a class="active" href="/admin">Admin</a>');
+    expect(html).not.toContain("Culture");
   });
 
   test("renders a dedicated article page with image, audio, text blocks, and optional alignment", () => {
