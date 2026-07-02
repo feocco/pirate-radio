@@ -1,4 +1,5 @@
 import { cleanText } from "./extractor.js";
+import { filterVoiceExcludedArticles } from "./articleFilters.js";
 import { slugFromUrl } from "./slug.js";
 
 export interface PirateArticle {
@@ -27,9 +28,10 @@ export async function fetchPirateFeed(feedUrl = PIRATE_RSS_URL): Promise<PirateA
 }
 
 export function parsePirateFeed(xml: string): PirateArticle[] {
-  return Array.from(xml.matchAll(/<item>([\s\S]*?)<\/item>/g), (match) => parseFeedItem(match[1]))
+  const articles = Array.from(xml.matchAll(/<item>([\s\S]*?)<\/item>/g), (match) => parseFeedItem(match[1]))
     .filter((item): item is PirateArticle => item !== null)
     .map((item) => ({ ...item, slug: slugFromUrl(item.url) }));
+  return filterVoiceExcludedArticles(articles);
 }
 
 export function detectNewArticles(

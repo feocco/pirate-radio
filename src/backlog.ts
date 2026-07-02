@@ -1,3 +1,4 @@
+import { filterVoiceExcludedArticles } from "./articleFilters.js";
 import { slugFromUrl } from "./slug.js";
 import type { PirateArticle } from "./feed.js";
 import type { LibraryManifest } from "./library.js";
@@ -36,7 +37,7 @@ export type QueueBacklogConversionResult =
   | { ok: false; status: "missing" };
 
 export function buildBacklogItems(input: BuildBacklogItemsInput): BacklogItem[] {
-  return input.articles.map((article) => {
+  return filterVoiceExcludedArticles(input.articles).map((article) => {
     const slug = article.slug ?? slugFromUrl(article.url);
     return {
       slug,
@@ -55,7 +56,9 @@ export function findBacklogArticle(
   articles: PirateArticle[],
   slug: string,
 ): PirateArticle | undefined {
-  return articles.find((article) => (article.slug ?? slugFromUrl(article.url)) === slug);
+  return filterVoiceExcludedArticles(articles).find(
+    (article) => (article.slug ?? slugFromUrl(article.url)) === slug,
+  );
 }
 
 export async function queueBacklogConversion(

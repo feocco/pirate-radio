@@ -23,6 +23,15 @@ const articles: PirateArticle[] = [
     description: "Needs audio.",
     slug: "unconverted-story",
   },
+  {
+    id: "https://piratewires.substack.com/p/friday-three-morning-takes-84a",
+    title: "Monday: Three Morning Takes",
+    url: "https://piratewires.substack.com/p/friday-three-morning-takes-84a",
+    author: "Pirate Staff",
+    publishedAt: "Mon, 22 Jun 2026 09:45:52 GMT",
+    description: "Short takes.",
+    slug: "friday-three-morning-takes-84a",
+  },
 ];
 
 const manifest: LibraryManifest = {
@@ -69,10 +78,12 @@ describe("backlog", () => {
         processing: true,
       }),
     ]);
+    expect(items.map((item) => item.title)).not.toContain("Monday: Three Morning Takes");
   });
 
   test("finds backlog articles by slug", () => {
     expect(findBacklogArticle(articles, "unconverted-story")?.title).toBe("Unconverted Story");
+    expect(findBacklogArticle(articles, "friday-three-morning-takes-84a")).toBeUndefined();
     expect(findBacklogArticle(articles, "missing-story")).toBeUndefined();
   });
 

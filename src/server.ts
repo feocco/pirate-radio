@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { basename, join, resolve } from "node:path";
 import { contentTypeForAsset } from "./assets.js";
 import { buildBacklogItems, queueBacklogConversion } from "./backlog.js";
+import { filterVoiceExcludedLibraryManifest } from "./articleFilters.js";
 import { fetchPirateFeed, detectNewArticles } from "./feed.js";
 import { extractStoryFromUrl } from "./browser.js";
 import type { PirateRadioConfig } from "./config.js";
@@ -175,7 +176,11 @@ export class PirateRadioService {
       return;
     }
     if (request.method === "GET" && url.pathname === "/library.json") {
-      json(response, 200, await readLibraryManifest(this.options.config.libraryDir));
+      json(
+        response,
+        200,
+        filterVoiceExcludedLibraryManifest(await readLibraryManifest(this.options.config.libraryDir)),
+      );
       return;
     }
     if (request.method === "GET" && url.pathname.startsWith("/images/")) {
