@@ -48,13 +48,16 @@ login-required notification that opens the Tailnet-only reauth browser.
 
 ## Backlog
 
-The `/backlog` page uses the current Pirate Wires RSS feed only. `/backlog.json`
+The `/backlog` list uses the current Pirate Wires RSS feed only. `/backlog.json`
 marks articles as converted by comparing feed slugs/source URLs with the library
 manifest, and marks in-flight conversions from service memory. Posting to
 `/backlog/convert/<slug>` records the feed article in pending state and starts
-the existing `accept` workflow in the background, so the browser request returns
-quickly and completion/failure still comes through the normal phone
-notifications.
+the existing `accept` workflow in the background.
+
+The backlog page also accepts pasted `piratewires.com/p/...` article URLs.
+`POST /backlog/convert-url` validates that the URL is from Pirate Wires, records
+a minimal pending article, and starts the same background conversion workflow.
+Completion/failure still comes through the normal phone notifications.
 
 ## Playback Progress
 

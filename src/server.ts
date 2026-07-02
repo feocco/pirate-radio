@@ -3,7 +3,7 @@ import { access, mkdir, readFile, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { basename, join, resolve } from "node:path";
 import { contentTypeForAsset } from "./assets.js";
-import { buildBacklogItems, queueBacklogConversion } from "./backlog.js";
+import { buildBacklogItems, queueBacklogConversion, queueBacklogUrlConversion } from "./backlog.js";
 import { filterVoiceExcludedLibraryManifest } from "./articleFilters.js";
 import { fetchPirateFeed, detectNewArticles } from "./feed.js";
 import { extractStoryFromUrl } from "./browser.js";
@@ -174,6 +174,30 @@ export class PirateRadioService {
         startConversion: (queuedSlug) => this.decide(queuedSlug, "accept"),
       });
       json(response, result.status === "missing" ? 404 : 200, result);
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/backlog/convert-url") {
+      try {
+        const body = await readJsonBody(request);
+        const manifest = await readLibraryManifest(this.options.config.libraryDir);
+        const state = await this.getState();
+        const result = await queueBacklogUrlConversion({
+          url: String(body.url ?? ""),
+          manifest,
+          state,
+          statePath: this.options.config.statePath,
+          processingSlugs: this.processingBacklogSlugs,
+          writeState,
+          startConversion: (queuedSlug) => this.decide(queuedSlug, "accept"),
+        });
+        json(response, result.ok ? 200 : 400, result);
+      } catch {
+        json(response, 400, {
+          ok: false,
+          status: "invalid_url",
+          error: "Enter a valid URL.",
+        });
+      }
       return;
     }
     if (request.method === "GET" && url.pathname.startsWith("/article/")) {

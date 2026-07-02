@@ -42,6 +42,10 @@ const sharedCss = `
   .search { min-width: min(100%, 320px); padding: 11px 12px; border: 2px solid var(--line); background: #fff; font: inherit; font-weight: 700; }
   .toggle { display: flex; align-items: center; gap: 8px; font-weight: 900; }
   .pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 22px 0 64px; }
+  .url-queue { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin: 24px auto 0; padding-bottom: 20px; border-bottom: 2px solid var(--line); }
+  .url-queue .search { width: 100%; min-width: 0; }
+  .status { grid-column: 1 / -1; min-height: 20px; color: var(--muted); font-weight: 900; }
+  .status.error { color: #9d1111; }
   .backlog-summary { color: var(--muted); font-weight: 900; }
   .backlog-list { display: grid; gap: 0; margin: 22px auto 42px; border-top: 2px solid var(--line); }
   .backlog-row { display: grid; grid-template-columns: 1fr auto; gap: 18px; padding: 15px 0; border-bottom: 1px solid #777; align-items: center; }
@@ -72,6 +76,7 @@ const sharedCss = `
     .topbar a { border-right: 0; border-bottom: 1px solid #666; }
     .brandbar { padding: 14px 16px; }
     .item { grid-template-columns: 1fr; }
+    .url-queue { grid-template-columns: 1fr; }
     .backlog-row { grid-template-columns: 1fr; }
     .backlog-row .actions { justify-content: flex-start; min-width: 0; }
     .article-meta, .admin-row { display: block; }
@@ -238,6 +243,11 @@ export function renderBacklogHtml(): string {
     <h1>Backlog</h1>
     <p class="deck">Recent Pirate Wires articles that can be queued for audio generation.</p>
   </section>
+  <form id="url-queue" class="url-queue wrap">
+    <input id="article-url" class="search" type="url" placeholder="Paste Pirate Wires article URL" aria-label="Paste Pirate Wires article URL">
+    <button id="queue-url" class="button" type="submit">Convert URL</button>
+    <div id="url-status" class="status" role="status"></div>
+  </form>
   <section class="toolbar wrap">
     <input id="search" class="search" type="search" placeholder="Search title, author, or description" aria-label="Search backlog">
     <label class="toggle"><input id="show-all" type="checkbox"> All recent</label>
@@ -258,6 +268,10 @@ export function renderBacklogHtml(): string {
     const prev = document.getElementById("prev");
     const next = document.getElementById("next");
     const pageLabel = document.getElementById("page");
+    const urlForm = document.getElementById("url-queue");
+    const articleUrl = document.getElementById("article-url");
+    const queueUrlButton = document.getElementById("queue-url");
+    const urlStatus = document.getElementById("url-status");
     let items = [];
     let pageIndex = 0;
     let pollTimer;
@@ -354,6 +368,39 @@ export function renderBacklogHtml(): string {
       schedulePolling();
     }
 
+    async function queueUrl(event) {
+      event.preventDefault();
+      urlStatus.className = "status";
+      urlStatus.textContent = "";
+      queueUrlButton.disabled = true;
+      queueUrlButton.textContent = "Queueing";
+      try {
+        const response = await fetch("/backlog/convert-url", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ url: articleUrl.value }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Could not queue Pirate Wires URL.");
+        }
+        if (payload.status === "converted") {
+          urlStatus.textContent = "Already converted. Check the main reader.";
+        } else if (payload.status === "processing") {
+          urlStatus.textContent = "Already processing. You will get a notification when it is ready.";
+        } else {
+          urlStatus.textContent = "Queued. You will get a notification when audio is ready.";
+        }
+        articleUrl.value = "";
+      } catch (error) {
+        urlStatus.className = "status error";
+        urlStatus.textContent = error.message;
+      } finally {
+        queueUrlButton.disabled = false;
+        queueUrlButton.textContent = "Convert URL";
+      }
+    }
+
     function schedulePolling() {
       clearInterval(pollTimer);
       if (items.some((item) => item.processing)) {
@@ -365,6 +412,7 @@ export function renderBacklogHtml(): string {
     showAll.addEventListener("change", () => { pageIndex = 0; render(); });
     prev.addEventListener("click", () => { pageIndex -= 1; render(); });
     next.addEventListener("click", () => { pageIndex += 1; render(); });
+    urlForm.addEventListener("submit", queueUrl);
     loadBacklog().catch((error) => {
       root.textContent = error.message;
     });

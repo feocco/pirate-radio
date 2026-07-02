@@ -1,5 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
-import { buildBacklogItems, findBacklogArticle, queueBacklogConversion } from "../src/backlog.js";
+import {
+  buildBacklogItems,
+  findBacklogArticle,
+  queueBacklogConversion,
+  queueBacklogUrlConversion,
+  validatePirateWiresArticleUrl,
+} from "../src/backlog.js";
 import type { PirateArticle } from "../src/feed.js";
 import type { LibraryManifest } from "../src/library.js";
 import { createInitialState } from "../src/state.js";
@@ -182,5 +188,69 @@ describe("backlog", () => {
     });
 
     expect(result).toEqual({ ok: false, status: "missing" });
+  });
+
+  test("validates pasted Pirate Wires article URLs", () => {
+    expect(validatePirateWiresArticleUrl("https://www.piratewires.com/p/test-story")).toEqual({
+      ok: true,
+      url: "https://www.piratewires.com/p/test-story",
+      slug: "test-story",
+    });
+    expect(validatePirateWiresArticleUrl("not a url")).toEqual({
+      ok: false,
+      error: "Enter a valid URL.",
+    });
+    expect(validatePirateWiresArticleUrl("https://example.com/p/test-story")).toEqual({
+      ok: false,
+      error: "Enter a Pirate Wires URL from piratewires.com.",
+    });
+    expect(validatePirateWiresArticleUrl("https://www.piratewires.com/about")).toEqual({
+      ok: false,
+      error: "Enter a Pirate Wires article URL like https://www.piratewires.com/p/story-slug.",
+    });
+  });
+
+  test("queueing a pasted URL records pending state and starts conversion", async () => {
+    const state = createInitialState();
+    const processingSlugs = new Set<string>();
+    const writeState = vi.fn(async () => {});
+    const startConversion = vi.fn(async () => {});
+
+    const result = await queueBacklogUrlConversion({
+      url: "https://www.piratewires.com/p/direct-story",
+      manifest,
+      state,
+      statePath: "/tmp/state.json",
+      processingSlugs,
+      writeState,
+      startConversion,
+    });
+
+    expect(result).toEqual({ ok: true, status: "queued", slug: "direct-story" });
+    expect(state.pending["direct-story"]).toMatchObject({
+      id: "https://www.piratewires.com/p/direct-story",
+      url: "https://www.piratewires.com/p/direct-story",
+      slug: "direct-story",
+    });
+    expect(writeState).toHaveBeenCalledTimes(1);
+    expect(startConversion).toHaveBeenCalledWith("direct-story");
+  });
+
+  test("queueing a pasted non-Pirate-Wires URL reports a validation error", async () => {
+    const result = await queueBacklogUrlConversion({
+      url: "https://example.com/p/direct-story",
+      manifest,
+      state: createInitialState(),
+      statePath: "/tmp/state.json",
+      processingSlugs: new Set(),
+      writeState: vi.fn(async () => {}),
+      startConversion: vi.fn(async () => {}),
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: "invalid_url",
+      error: "Enter a Pirate Wires URL from piratewires.com.",
+    });
   });
 });

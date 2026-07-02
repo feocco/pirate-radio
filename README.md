@@ -105,15 +105,17 @@ The reader serves:
 
 - `/` for the audio library with cached article art.
 - `/backlog` for recent RSS articles that have not been converted yet, with
-  search, pagination, and async conversion buttons.
+  search, pagination, async conversion buttons, and a pasted Pirate Wires URL
+  queue.
 - `/article/<slug>` for a dedicated article page with audio and full text.
 - `/progress/<slug>` for cross-device playback position.
 - `/audio/<slug>.mp3`, `/images/<slug>.<ext>`, and optional
   `/alignment/<slug>.json` assets.
 
-The backlog is RSS-window-only in v1. It compares the current feed against the
-library manifest, then queues selected articles through the same approval,
-extraction, TTS, and notification workflow used by mobile actions.
+The backlog list is RSS-window-only in v1. It compares the current feed against
+the library manifest, then queues selected articles through the same approval,
+extraction, TTS, and notification workflow used by mobile actions. Pasted
+`piratewires.com/p/...` URLs can also be queued from the backlog page.
 
 Set `PIRATE_RADIO_ENABLE_ALIGNMENT=true` to prototype word-level highlighting.
 When enabled, the service runs a post-TTS `whisper-1` transcription with word
