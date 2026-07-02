@@ -3,6 +3,7 @@ import { access, mkdir, readFile, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { basename, join, resolve } from "node:path";
 import { contentTypeForAsset } from "./assets.js";
+import { buildBacklogItems, queueBacklogConversion } from "./backlog.js";
 import { fetchPirateFeed, detectNewArticles } from "./feed.js";
 import { extractStoryFromUrl } from "./browser.js";
 import type { PirateRadioConfig } from "./config.js";
@@ -17,7 +18,7 @@ import {
   type PirateRadioDecision,
 } from "./notifications.js";
 import { HomelabFunctionsNotifier, type Notifier } from "./notifier.js";
-import { renderArticleHtml, renderReaderHtml } from "./reader.js";
+import { renderArticleHtml, renderBacklogHtml, renderReaderHtml } from "./reader.js";
 import { readState, seenArticleIds, writeState, type PirateRadioState } from "./state.js";
 import { createTtsProvider } from "./tts/index.js";
 import { handleArticleDecision, providerSynthesizer, refreshLibraryArticle } from "./workflow.js";
@@ -33,6 +34,7 @@ export class PirateRadioService {
   private readonly notifier: Notifier;
   private readonly actionListener: HomeAssistantActionListener;
   private readonly failureNotifications = new Set<string>();
+  private readonly processingBacklogSlugs = new Set<string>();
 
   constructor(private readonly options: PirateRadioServiceOptions) {
     this.notifier =
@@ -130,6 +132,42 @@ export class PirateRadioService {
     }
     if (request.method === "GET" && url.pathname === "/") {
       html(response, renderReaderHtml());
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/backlog") {
+      html(response, renderBacklogHtml());
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/backlog.json") {
+      const articles = await fetchPirateFeed(this.options.config.feedUrl);
+      const manifest = await readLibraryManifest(this.options.config.libraryDir);
+      json(response, 200, {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        items: buildBacklogItems({
+          articles,
+          manifest,
+          processingSlugs: this.processingBacklogSlugs,
+        }),
+      });
+      return;
+    }
+    if (request.method === "POST" && url.pathname.startsWith("/backlog/convert/")) {
+      const slug = decodeURIComponent(url.pathname.slice("/backlog/convert/".length));
+      const articles = await fetchPirateFeed(this.options.config.feedUrl);
+      const manifest = await readLibraryManifest(this.options.config.libraryDir);
+      const state = await this.getState();
+      const result = await queueBacklogConversion({
+        slug,
+        articles,
+        manifest,
+        state,
+        statePath: this.options.config.statePath,
+        processingSlugs: this.processingBacklogSlugs,
+        writeState,
+        startConversion: (queuedSlug) => this.decide(queuedSlug, "accept"),
+      });
+      json(response, result.status === "missing" ? 404 : 200, result);
       return;
     }
     if (request.method === "GET" && url.pathname.startsWith("/article/")) {

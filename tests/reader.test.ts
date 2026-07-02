@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { renderArticleHtml, renderReaderHtml } from "../src/reader.js";
+import { renderArticleHtml, renderBacklogHtml, renderReaderHtml } from "../src/reader.js";
 import type { LibraryItem } from "../src/library.js";
 import type { Story } from "../src/types.js";
 
@@ -17,6 +17,18 @@ describe("reader page", () => {
     expect(html).toContain("Read");
     expect(html).toContain("Download MP3");
     expect(html).toContain("Pirate Wires");
+    expect(html).toContain('href="/backlog"');
+  });
+
+  test("renders a backlog page with search, pagination, and convert controls", () => {
+    const html = renderBacklogHtml();
+
+    expect(html).toContain("/backlog.json");
+    expect(html).toContain("/backlog/convert/");
+    expect(html).toContain("All recent");
+    expect(html).toContain("Search");
+    expect(html).toContain("Convert");
+    expect(html).toContain("pageSize = 10");
   });
 
   test("renders a dedicated article page with image, audio, text blocks, and optional alignment", () => {

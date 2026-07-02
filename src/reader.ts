@@ -35,7 +35,14 @@ const sharedCss = `
   .tagline { font-size: 18px; max-width: 820px; margin: 0 0 16px; }
   audio { width: 100%; display: block; margin-top: 14px; }
   .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
-  .readlink { display: inline-block; background: #000; color: #fff; text-decoration: none; padding: 9px 13px; font-weight: 900; border: 1px solid #000; }
+  .readlink, .button { display: inline-block; background: #000; color: #fff; text-decoration: none; padding: 9px 13px; font-weight: 900; border: 1px solid #000; font: inherit; cursor: pointer; }
+  .button:disabled, .badge { background: transparent; color: var(--ink); cursor: default; }
+  .badge { display: inline-block; padding: 9px 13px; border: 1px solid var(--line); font-weight: 900; }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: 24px auto 0; }
+  .search { min-width: min(100%, 320px); padding: 11px 12px; border: 2px solid var(--line); background: #fff; font: inherit; font-weight: 700; }
+  .toggle { display: flex; align-items: center; gap: 8px; font-weight: 900; }
+  .pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 22px 0 64px; }
+  .backlog-summary { color: var(--muted); font-weight: 900; }
   .article-shell { width: min(1040px, calc(100vw - 32px)); margin: 0 auto; padding-bottom: 70px; }
   .article-hero { padding: 62px 0 26px; text-align: center; }
   .article-hero h1 { margin: 0 auto; }
@@ -162,6 +169,161 @@ export function renderReaderHtml(): string {
 </html>`;
 }
 
+export function renderBacklogHtml(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backlog - Pirate Radio</title>
+  <style>${sharedCss}</style>
+</head>
+<body>
+  ${renderChrome()}
+  <section class="hero wrap">
+    <div class="kicker">Recent RSS</div>
+    <h1>Backlog</h1>
+    <p class="deck">Recent Pirate Wires articles that can be queued for audio generation.</p>
+  </section>
+  <section class="toolbar wrap">
+    <input id="search" class="search" type="search" placeholder="Search title, author, or description" aria-label="Search backlog">
+    <label class="toggle"><input id="show-all" type="checkbox"> All recent</label>
+    <div id="summary" class="backlog-summary"></div>
+  </section>
+  <main id="backlog" class="library wrap">Loading...</main>
+  <nav class="pager wrap" aria-label="Backlog pages">
+    <button id="prev" class="button" type="button">Previous</button>
+    <span id="page"></span>
+    <button id="next" class="button" type="button">Next</button>
+  </nav>
+  <script>
+    const pageSize = 10;
+    const root = document.getElementById("backlog");
+    const search = document.getElementById("search");
+    const showAll = document.getElementById("show-all");
+    const summary = document.getElementById("summary");
+    const prev = document.getElementById("prev");
+    const next = document.getElementById("next");
+    const pageLabel = document.getElementById("page");
+    let items = [];
+    let pageIndex = 0;
+    let pollTimer;
+
+    function normalize(value) {
+      return String(value || "").toLowerCase();
+    }
+
+    function filteredItems() {
+      const query = normalize(search.value);
+      return items
+        .filter((item) => showAll.checked || !item.converted)
+        .filter((item) => !query || [item.title, item.author, item.description].some((value) => normalize(value).includes(query)));
+    }
+
+    function render() {
+      const visible = filteredItems();
+      const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+      pageIndex = Math.min(pageIndex, totalPages - 1);
+      const pageItems = visible.slice(pageIndex * pageSize, pageIndex * pageSize + pageSize);
+      root.textContent = "";
+      summary.textContent = visible.length + " article" + (visible.length === 1 ? "" : "s");
+      pageLabel.textContent = "Page " + (pageIndex + 1) + " of " + totalPages;
+      prev.disabled = pageIndex === 0;
+      next.disabled = pageIndex >= totalPages - 1;
+      if (pageItems.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = showAll.checked ? "No recent articles found." : "No unconverted recent articles.";
+        root.append(empty);
+        return;
+      }
+      for (const item of pageItems) {
+        const section = document.createElement("section");
+        section.className = "item";
+        const placeholder = document.createElement("div");
+        placeholder.className = "thumb placeholder";
+        placeholder.textContent = "PW";
+        const content = document.createElement("div");
+        const heading = document.createElement("h2");
+        heading.textContent = item.title;
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = [item.publishedAt, item.author].filter(Boolean).join(" - ");
+        const description = document.createElement("p");
+        description.className = "tagline";
+        description.textContent = item.description || "";
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        const source = document.createElement("a");
+        source.className = "readlink";
+        source.href = item.url;
+        source.textContent = "Source";
+        if (item.converted) {
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = "Converted";
+          actions.append(badge);
+        } else {
+          const button = document.createElement("button");
+          button.className = "button";
+          button.type = "button";
+          button.textContent = item.processing ? "Processing" : "Convert";
+          button.disabled = item.processing;
+          button.addEventListener("click", () => convertItem(item.slug, button));
+          actions.append(button);
+        }
+        actions.append(source);
+        content.append(heading, meta);
+        if (item.description) content.append(description);
+        content.append(actions);
+        section.append(placeholder, content);
+        root.append(section);
+      }
+    }
+
+    async function loadBacklog() {
+      const response = await fetch("/backlog.json", { cache: "no-store" });
+      if (!response.ok) throw new Error("Could not load backlog");
+      const payload = await response.json();
+      items = Array.isArray(payload.items) ? payload.items : [];
+      render();
+      schedulePolling();
+    }
+
+    async function convertItem(slug, button) {
+      button.disabled = true;
+      button.textContent = "Processing";
+      const response = await fetch("/backlog/convert/" + encodeURIComponent(slug), { method: "POST" });
+      if (!response.ok) {
+        button.disabled = false;
+        button.textContent = "Convert";
+        throw new Error("Could not queue article");
+      }
+      const item = items.find((candidate) => candidate.slug === slug);
+      if (item) item.processing = true;
+      render();
+      schedulePolling();
+    }
+
+    function schedulePolling() {
+      clearInterval(pollTimer);
+      if (items.some((item) => item.processing)) {
+        pollTimer = setInterval(loadBacklog, 10000);
+      }
+    }
+
+    search.addEventListener("input", () => { pageIndex = 0; render(); });
+    showAll.addEventListener("change", () => { pageIndex = 0; render(); });
+    prev.addEventListener("click", () => { pageIndex -= 1; render(); });
+    next.addEventListener("click", () => { pageIndex += 1; render(); });
+    loadBacklog().catch((error) => {
+      root.textContent = error.message;
+    });
+  </script>
+</body>
+</html>`;
+}
+
 export function renderArticleHtml(story: Story, item: LibraryItem): string {
   const blocks = story.contentBlocks?.length
     ? story.contentBlocks
@@ -214,7 +376,7 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
 }
 
 function renderChrome(): string {
-  return `<nav class="topbar"><div>Pirate Wires</div><div>Technology</div><div>Culture</div></nav>
+  return `<nav class="topbar"><div><a href="/">Pirate Wires</a></div><div><a href="/backlog">Backlog</a></div><div>Culture</div></nav>
   <div class="brandbar"><div class="brand"><span class="mark">PW</span><span>Pirate Radio</span></div><div>AI-generated audio</div></div>`;
 }
 

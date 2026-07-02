@@ -17,7 +17,8 @@ Pirate Radio is a local-first reader pipeline for Pirate Wires articles.
 7. Write story JSON, text, MP3, cached image, and a library manifest.
 8. Send a ready notification with a direct link to the generated article page.
 9. Serve a Tailnet-only reader UI with a library view, article detail pages,
-   cached images, inline MP3 streaming, and saved playback position.
+   a recent-article backlog, cached images, inline MP3 streaming, and saved
+   playback position.
 
 The first service run treats the current feed as a baseline and queues at most
 one notification, which avoids a startup flood. Later polls only mark articles
@@ -33,6 +34,7 @@ login-required notification that opens the Tailnet-only reauth browser.
 
 - `src/feed.ts`: RSS fetch and parsing.
 - `src/server.ts`: service loop, HTTP reader routes, and action simulation.
+- `src/backlog.ts`: RSS backlog status and async conversion queue helpers.
 - `src/notifications.ts`: stable mobile action IDs.
 - `src/haActions.ts`: Home Assistant WebSocket listener.
 - `src/workflow.ts`: article decision handling.
@@ -41,7 +43,17 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/tts/`: provider interface and OpenAI implementation.
 - `src/library.ts`: durable manifest writer.
 - `src/reader.ts`: library and article-page renderer with local
-  playback-position storage.
+  playback-position storage, plus the RSS backlog page.
+
+## Backlog
+
+The `/backlog` page uses the current Pirate Wires RSS feed only. `/backlog.json`
+marks articles as converted by comparing feed slugs/source URLs with the library
+manifest, and marks in-flight conversions from service memory. Posting to
+`/backlog/convert/<slug>` records the feed article in pending state and starts
+the existing `accept` workflow in the background, so the browser request returns
+quickly and completion/failure still comes through the normal phone
+notifications.
 
 ## Alignment Prototype
 

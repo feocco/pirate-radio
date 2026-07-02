@@ -104,9 +104,15 @@ after login.
 The reader serves:
 
 - `/` for the audio library with cached article art.
+- `/backlog` for recent RSS articles that have not been converted yet, with
+  search, pagination, and async conversion buttons.
 - `/article/<slug>` for a dedicated article page with audio and full text.
 - `/audio/<slug>.mp3`, `/images/<slug>.<ext>`, and optional
   `/alignment/<slug>.json` assets.
+
+The backlog is RSS-window-only in v1. It compares the current feed against the
+library manifest, then queues selected articles through the same approval,
+extraction, TTS, and notification workflow used by mobile actions.
 
 Set `PIRATE_RADIO_ENABLE_ALIGNMENT=true` to prototype word-level highlighting.
 When enabled, the service runs a post-TTS `whisper-1` transcription with word
