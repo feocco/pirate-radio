@@ -21,6 +21,7 @@ import {
 import { HomelabFunctionsNotifier, type Notifier } from "./notifier.js";
 import { readPlaybackProgress, writePlaybackProgress } from "./progress.js";
 import { renderAdminHtml, renderArticleHtml, renderBacklogHtml, renderReaderHtml } from "./reader.js";
+import { getPirateRadioOpenApiDocument, renderPirateRadioDocsHtml } from "./serviceDocs.js";
 import { readState, seenArticleIds, writeState, type PirateRadioState } from "./state.js";
 import { createTtsProvider } from "./tts/index.js";
 import { handleArticleDecision, providerSynthesizer, refreshLibraryArticle } from "./workflow.js";
@@ -28,6 +29,14 @@ import { handleArticleDecision, providerSynthesizer, refreshLibraryArticle } fro
 export interface PirateRadioServiceOptions {
   config: PirateRadioConfig;
   notifier?: Notifier;
+}
+
+interface PirateRadioRequestHandlerOptions {
+  config: PirateRadioConfig;
+  getState?: () => Promise<PirateRadioState>;
+  decide?: (slug: string, decision: PirateRadioDecision) => Promise<void>;
+  processingSlugs?: Set<string>;
+  sendNotification?: (notification: ArticleNotification) => Promise<void>;
 }
 
 export class PirateRadioService {
@@ -55,8 +64,15 @@ export class PirateRadioService {
   async start(): Promise<void> {
     await mkdir(this.options.config.libraryDir, { recursive: true });
     this.state = await readState(this.options.config.statePath);
+    const requestHandler = createPirateRadioRequestHandler({
+      config: this.options.config,
+      getState: () => this.getState(),
+      decide: (slug, decision) => this.decide(slug, decision),
+      processingSlugs: this.processingBacklogSlugs,
+      sendNotification: (notification) => this.sendNotification(notification),
+    });
     const server = createServer((request, response) => {
-      void this.handleRequest(request, response);
+      void requestHandler(request, response);
     });
     server.listen(this.options.config.port, this.options.config.host, () => {
       console.log(
@@ -126,176 +142,6 @@ export class PirateRadioService {
     return this.state;
   }
 
-  private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const url = new URL(request.url ?? "/", "http://localhost");
-    if (request.method === "GET" && url.pathname === "/health") {
-      json(response, 200, { ok: true });
-      return;
-    }
-    if (request.method === "GET" && url.pathname === "/") {
-      html(response, renderReaderHtml());
-      return;
-    }
-    if (request.method === "GET" && url.pathname === "/backlog") {
-      html(response, renderBacklogHtml());
-      return;
-    }
-    if (request.method === "GET" && url.pathname === "/admin") {
-      html(response, renderAdminHtml());
-      return;
-    }
-    if (request.method === "GET" && url.pathname === "/backlog.json") {
-      const articles = await fetchPirateFeed(this.options.config.feedUrl);
-      const manifest = await readLibraryManifest(this.options.config.libraryDir);
-      json(response, 200, {
-        version: 1,
-        updatedAt: new Date().toISOString(),
-        items: buildBacklogItems({
-          articles,
-          manifest,
-          processingSlugs: this.processingBacklogSlugs,
-        }),
-      });
-      return;
-    }
-    if (request.method === "POST" && url.pathname.startsWith("/backlog/convert/")) {
-      const slug = decodeURIComponent(url.pathname.slice("/backlog/convert/".length));
-      const articles = await fetchPirateFeed(this.options.config.feedUrl);
-      const manifest = await readLibraryManifest(this.options.config.libraryDir);
-      const state = await this.getState();
-      const result = await queueBacklogConversion({
-        slug,
-        articles,
-        manifest,
-        state,
-        statePath: this.options.config.statePath,
-        processingSlugs: this.processingBacklogSlugs,
-        writeState,
-        startConversion: (queuedSlug) => this.decide(queuedSlug, "accept"),
-      });
-      json(response, result.status === "missing" ? 404 : 200, result);
-      return;
-    }
-    if (request.method === "POST" && url.pathname === "/backlog/convert-url") {
-      try {
-        const body = await readJsonBody(request);
-        const manifest = await readLibraryManifest(this.options.config.libraryDir);
-        const state = await this.getState();
-        const result = await queueBacklogUrlConversion({
-          url: String(body.url ?? ""),
-          manifest,
-          state,
-          statePath: this.options.config.statePath,
-          processingSlugs: this.processingBacklogSlugs,
-          writeState,
-          startConversion: (queuedSlug) => this.decide(queuedSlug, "accept"),
-        });
-        json(response, result.ok ? 200 : 400, result);
-      } catch {
-        json(response, 400, {
-          ok: false,
-          status: "invalid_url",
-          error: "Enter a valid URL.",
-        });
-      }
-      return;
-    }
-    if (request.method === "GET" && url.pathname.startsWith("/article/")) {
-      await renderArticle(response, this.options.config.libraryDir, decodeURIComponent(url.pathname));
-      return;
-    }
-    if (request.method === "GET" && url.pathname.startsWith("/progress/")) {
-      const slug = decodeURIComponent(url.pathname.slice("/progress/".length));
-      const progress = await readPlaybackProgress(this.options.config.libraryDir, slug);
-      json(response, progress ? 200 : 404, progress ?? { error: "progress_not_found" });
-      return;
-    }
-    if (request.method === "PUT" && url.pathname.startsWith("/progress/")) {
-      const slug = decodeURIComponent(url.pathname.slice("/progress/".length));
-      try {
-        const body = await readJsonBody(request);
-        const progress = await writePlaybackProgress(this.options.config.libraryDir, slug, {
-          positionSeconds: Number(body.positionSeconds),
-          durationSeconds:
-            body.durationSeconds == null ? undefined : Number(body.durationSeconds),
-        });
-        json(response, 200, progress);
-      } catch {
-        json(response, 400, { error: "bad_progress" });
-      }
-      return;
-    }
-    if (request.method === "GET" && url.pathname === "/library.json") {
-      json(
-        response,
-        200,
-        filterVoiceExcludedLibraryManifest(await readLibraryManifest(this.options.config.libraryDir)),
-      );
-      return;
-    }
-    if (request.method === "GET" && url.pathname.startsWith("/images/")) {
-      await streamLibraryAsset(
-        response,
-        this.options.config.libraryDir,
-        "images",
-        decodeURIComponent(url.pathname),
-        contentTypeForAsset(basename(url.pathname)),
-      );
-      return;
-    }
-    if (request.method === "GET" && url.pathname.startsWith("/alignment/")) {
-      await streamLibraryAsset(
-        response,
-        this.options.config.libraryDir,
-        "alignment",
-        decodeURIComponent(url.pathname),
-        "application/json",
-      );
-      return;
-    }
-    if (
-      (request.method === "GET" || request.method === "HEAD") &&
-      url.pathname.startsWith("/audio/")
-    ) {
-      await streamAudio(
-        request,
-        response,
-        this.options.config.libraryDir,
-        decodeURIComponent(url.pathname),
-        request.method === "HEAD",
-      );
-      return;
-    }
-    if (request.method === "POST" && url.pathname.startsWith("/simulate/")) {
-      const [, , decision, slug] = url.pathname.split("/");
-      if (decision === "refresh" && slug) {
-        const regenerateAudio = url.searchParams.get("regenerateAudio") === "true";
-        const notify = url.searchParams.get("notify") === "true";
-        const provider = regenerateAudio ? createTtsProvider("openai") : undefined;
-        const result = await refreshLibraryArticle({
-          slug,
-          libraryDir: this.options.config.libraryDir,
-          readArticle: (articleUrl) => extractStoryFromUrl(articleUrl),
-          regenerateAudio,
-          synthesize: provider ? providerSynthesizer(provider) : undefined,
-        });
-        if (notify && result.libraryItem) {
-          await this.sendNotification(
-            buildArticleReadyNotification(result.libraryItem, this.options.config.publicBaseUrl),
-          );
-        }
-        json(response, result.status === "missing" ? 404 : 200, { ok: result.status !== "missing", ...result });
-        return;
-      }
-      if ((decision === "accept" || decision === "skip") && slug) {
-        await this.decide(slug, decision);
-        json(response, 200, { ok: true, decision, slug });
-        return;
-      }
-    }
-    json(response, 404, { error: "not_found" });
-  }
-
   private async notifyArticleFailure(slug: string, error: unknown): Promise<void> {
     const state = await this.getState();
     const article = findArticleBySlug(state, slug);
@@ -324,6 +170,197 @@ export class PirateRadioService {
       console.error("[pirate-radio] notification failed", error);
     }
   }
+}
+
+export function createPirateRadioRequestHandler(options: PirateRadioRequestHandlerOptions) {
+  const getState = options.getState ?? missingRouteDependency<PirateRadioState>("getState");
+  const decide = options.decide ?? missingRouteDependency<void>("decide");
+  const processingSlugs = options.processingSlugs ?? new Set<string>();
+  const sendNotification = options.sendNotification ?? (async () => {});
+
+  return async function handleRequest(
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<void> {
+    const url = new URL(request.url ?? "/", "http://localhost");
+    if (request.method === "GET" && url.pathname === "/health") {
+      json(response, 200, { ok: true });
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/docs") {
+      html(response, renderPirateRadioDocsHtml());
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/openapi.json") {
+      json(response, 200, getPirateRadioOpenApiDocument());
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/") {
+      html(response, renderReaderHtml());
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/backlog") {
+      html(response, renderBacklogHtml());
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/admin") {
+      html(response, renderAdminHtml());
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/backlog.json") {
+      const articles = await fetchPirateFeed(options.config.feedUrl);
+      const manifest = await readLibraryManifest(options.config.libraryDir);
+      json(response, 200, {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        items: buildBacklogItems({
+          articles,
+          manifest,
+          processingSlugs,
+        }),
+      });
+      return;
+    }
+    if (request.method === "POST" && url.pathname.startsWith("/backlog/convert/")) {
+      const slug = decodeURIComponent(url.pathname.slice("/backlog/convert/".length));
+      const articles = await fetchPirateFeed(options.config.feedUrl);
+      const manifest = await readLibraryManifest(options.config.libraryDir);
+      const state = await getState();
+      const result = await queueBacklogConversion({
+        slug,
+        articles,
+        manifest,
+        state,
+        statePath: options.config.statePath,
+        processingSlugs,
+        writeState,
+        startConversion: (queuedSlug) => decide(queuedSlug, "accept"),
+      });
+      json(response, result.status === "missing" ? 404 : 200, result);
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/backlog/convert-url") {
+      try {
+        const body = await readJsonBody(request);
+        const manifest = await readLibraryManifest(options.config.libraryDir);
+        const state = await getState();
+        const result = await queueBacklogUrlConversion({
+          url: String(body.url ?? ""),
+          manifest,
+          state,
+          statePath: options.config.statePath,
+          processingSlugs,
+          writeState,
+          startConversion: (queuedSlug) => decide(queuedSlug, "accept"),
+        });
+        json(response, result.ok ? 200 : 400, result);
+      } catch {
+        json(response, 400, {
+          ok: false,
+          status: "invalid_url",
+          error: "Enter a valid URL.",
+        });
+      }
+      return;
+    }
+    if (request.method === "GET" && url.pathname.startsWith("/article/")) {
+      await renderArticle(response, options.config.libraryDir, decodeURIComponent(url.pathname));
+      return;
+    }
+    if (request.method === "GET" && url.pathname.startsWith("/progress/")) {
+      const slug = decodeURIComponent(url.pathname.slice("/progress/".length));
+      const progress = await readPlaybackProgress(options.config.libraryDir, slug);
+      json(response, progress ? 200 : 404, progress ?? { error: "progress_not_found" });
+      return;
+    }
+    if (request.method === "PUT" && url.pathname.startsWith("/progress/")) {
+      const slug = decodeURIComponent(url.pathname.slice("/progress/".length));
+      try {
+        const body = await readJsonBody(request);
+        const progress = await writePlaybackProgress(options.config.libraryDir, slug, {
+          positionSeconds: Number(body.positionSeconds),
+          durationSeconds:
+            body.durationSeconds == null ? undefined : Number(body.durationSeconds),
+        });
+        json(response, 200, progress);
+      } catch {
+        json(response, 400, { error: "bad_progress" });
+      }
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/library.json") {
+      json(
+        response,
+        200,
+        filterVoiceExcludedLibraryManifest(await readLibraryManifest(options.config.libraryDir)),
+      );
+      return;
+    }
+    if (request.method === "GET" && url.pathname.startsWith("/images/")) {
+      await streamLibraryAsset(
+        response,
+        options.config.libraryDir,
+        "images",
+        decodeURIComponent(url.pathname),
+        contentTypeForAsset(basename(url.pathname)),
+      );
+      return;
+    }
+    if (request.method === "GET" && url.pathname.startsWith("/alignment/")) {
+      await streamLibraryAsset(
+        response,
+        options.config.libraryDir,
+        "alignment",
+        decodeURIComponent(url.pathname),
+        "application/json",
+      );
+      return;
+    }
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      url.pathname.startsWith("/audio/")
+    ) {
+      await streamAudio(
+        request,
+        response,
+        options.config.libraryDir,
+        decodeURIComponent(url.pathname),
+        request.method === "HEAD",
+      );
+      return;
+    }
+    if (request.method === "POST" && url.pathname.startsWith("/simulate/")) {
+      const [, , decisionName, slug] = url.pathname.split("/");
+      if (decisionName === "refresh" && slug) {
+        const regenerateAudio = url.searchParams.get("regenerateAudio") === "true";
+        const notify = url.searchParams.get("notify") === "true";
+        const provider = regenerateAudio ? createTtsProvider("openai") : undefined;
+        const result = await refreshLibraryArticle({
+          slug,
+          libraryDir: options.config.libraryDir,
+          readArticle: (articleUrl) => extractStoryFromUrl(articleUrl),
+          regenerateAudio,
+          synthesize: provider ? providerSynthesizer(provider) : undefined,
+        });
+        if (notify && result.libraryItem) {
+          await sendNotification(
+            buildArticleReadyNotification(result.libraryItem, options.config.publicBaseUrl),
+          );
+        }
+        json(response, result.status === "missing" ? 404 : 200, {
+          ok: result.status !== "missing",
+          ...result,
+        });
+        return;
+      }
+      if ((decisionName === "accept" || decisionName === "skip") && slug) {
+        await decide(slug, decisionName);
+        json(response, 200, { ok: true, decision: decisionName, slug });
+        return;
+      }
+    }
+    json(response, 404, { error: "not_found" });
+  };
 }
 
 function findArticleBySlug(state: PirateRadioState, slug: string) {
@@ -487,4 +524,10 @@ async function readJsonBody(request: IncomingMessage): Promise<Record<string, un
     }
   }
   return JSON.parse(body || "{}") as Record<string, unknown>;
+}
+
+function missingRouteDependency<T>(name: string) {
+  return async (): Promise<T> => {
+    throw new Error(`Missing route dependency: ${name}`);
+  };
 }

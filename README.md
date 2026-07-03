@@ -104,6 +104,8 @@ after login.
 The reader serves:
 
 - `/` for the audio library with cached article art.
+- `/docs` for a browser-friendly summary of the service HTTP contract and
+  `/openapi.json` for the OpenAPI 3.1 document.
 - `/backlog` for recent RSS articles that have not been converted yet, with
   search, pagination, async conversion buttons, and a pasted Pirate Wires URL
   queue.
