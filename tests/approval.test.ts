@@ -4,7 +4,13 @@ import { dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { createInitialState, handleArticleDecision, refreshLibraryArticle } from "../src/workflow.js";
+import {
+  createCustomTextAudio,
+  createInitialState,
+  handleArticleDecision,
+  refreshLibraryArticle,
+  validateCustomTextInput,
+} from "../src/workflow.js";
 import type { PirateArticle } from "../src/feed.js";
 
 let tempDir: string | undefined;
@@ -240,5 +246,48 @@ describe("approval workflow", () => {
     expect(result.libraryItem!.wordCount).toBe(7);
     expect(result.libraryItem!.estimatedCostUsd).toBe(0.02);
     expect(result.libraryItem!.audioBytes).toBeGreaterThan("short mp3".length);
+  });
+
+  test("creates a library item from custom pasted text without article extraction", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-custom-"));
+
+    const result = await createCustomTextAudio({
+      title: "Custom Memo",
+      text: "First paragraph.\n\nSecond paragraph.",
+      libraryDir: tempDir,
+      synthesize: vi.fn(async ({ title, text, outputPath }) => {
+        await mkdir(dirname(outputPath), { recursive: true });
+        await writeFile(outputPath, Buffer.from(`${title}:${text}`));
+        return { provider: "mock", outputPath, estimatedCostUsd: 0.01 };
+      }),
+      now: () => new Date("2026-07-05T12:00:00.000Z"),
+    });
+
+    expect(result.status).toBe("created");
+    expect(result.libraryItem.slug).toBe("custom-memo-2026-07-05t12-00-00-000z");
+    expect(result.libraryItem.title).toBe("Custom Memo");
+    expect(result.libraryItem.sourceUrl).toBe("custom-text://local/custom-memo-2026-07-05t12-00-00-000z");
+    expect(result.libraryItem.wordCount).toBe(4);
+    expect(result.libraryItem.audioUrl).toBe("/audio/custom-memo-2026-07-05t12-00-00-000z.mp3");
+  });
+
+  test("validates custom pasted text before queueing", () => {
+    expect(validateCustomTextInput({ title: "Title", text: "Body text." })).toEqual({
+      ok: true,
+      title: "Title",
+      text: "Body text.",
+    });
+    expect(validateCustomTextInput({ title: "", text: "Body text." })).toEqual({
+      ok: false,
+      error: "Enter a title.",
+    });
+    expect(validateCustomTextInput({ title: "Title", text: "" })).toEqual({
+      ok: false,
+      error: "Enter text to convert.",
+    });
+    expect(validateCustomTextInput({ title: "Title", text: "x".repeat(60001) })).toEqual({
+      ok: false,
+      error: "Text must be 60,000 characters or less.",
+    });
   });
 });

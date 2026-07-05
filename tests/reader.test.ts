@@ -36,7 +36,11 @@ describe("reader page", () => {
     expect(html).toContain("/backlog.json");
     expect(html).toContain("/backlog/convert/");
     expect(html).toContain("/backlog/convert-url");
+    expect(html).toContain("/backlog/convert-text");
     expect(html).toContain("Paste Pirate Wires article URL");
+    expect(html).toContain("Custom text title");
+    expect(html).toContain("Paste text to convert");
+    expect(html).toContain("queueText");
     expect(html).toContain("queueUrl");
     expect(html).toContain("backlog-list");
     expect(html).toContain("backlog-row");

@@ -1,6 +1,7 @@
 # Architecture
 
-Pirate Radio is a local-first reader pipeline for Pirate Wires articles.
+Pirate Radio is a local-first reader pipeline for Pirate Wires articles and
+custom pasted text.
 
 ## Flow
 
@@ -10,10 +11,11 @@ Pirate Radio is a local-first reader pipeline for Pirate Wires articles.
    stable Yes/No action IDs.
 4. Listen for Home Assistant `mobile_app_notification_action` events over
    WebSocket.
-5. On approval, extract the story with Playwright, including title, tagline,
-   body blocks, section headings, and the hero image URL.
-6. Cache article art locally, synthesize MP3 audio through the selected TTS
-   provider, and optionally write word-timing alignment JSON.
+5. On article approval, extract the story with Playwright, including title,
+   tagline, body blocks, section headings, and the hero image URL. Custom text
+   entries skip extraction and create a story object directly from title/body.
+6. Cache article art locally when available, synthesize MP3 audio through the
+   selected TTS provider, and optionally write word-timing alignment JSON.
 7. Write story JSON, text, MP3, cached image, and a library manifest.
 8. Send a ready notification with a direct link to the generated article page.
 9. Serve a Tailnet-only reader UI with a library view, article detail pages,
@@ -58,6 +60,11 @@ The backlog page also accepts pasted `piratewires.com/p/...` article URLs.
 `POST /backlog/convert-url` validates that the URL is from Pirate Wires, records
 a minimal pending article, and starts the same background conversion workflow.
 Completion/failure still comes through the normal phone notifications.
+
+The same page accepts custom title/text entries. `POST /backlog/convert-text`
+validates the title/body, writes a generated story JSON/text file, synthesizes
+audio, appends the item to the library manifest, and sends the normal ready or
+failure notification. Custom text does not require Pirate Wires login.
 
 ## Playback Progress
 

@@ -6,9 +6,10 @@ import type { PirateArticle } from "./feed.js";
 import { appendLibraryItem, type LibraryItem } from "./library.js";
 import { readLibraryManifest } from "./library.js";
 import { storySlug } from "./output.js";
+import { sanitizeSlug } from "./slug.js";
 import { createInitialState, type PirateRadioState } from "./state.js";
 import type { TtsProvider, TtsRequest, TtsResult } from "./tts/index.js";
-import type { Story } from "./types.js";
+import type { Story, StoryContentBlock } from "./types.js";
 
 export { createInitialState };
 
@@ -40,6 +41,27 @@ export interface RefreshLibraryArticleInput {
 export interface RefreshLibraryArticleResult {
   status: "refreshed" | "missing";
   libraryItem?: LibraryItem;
+}
+
+export interface CustomTextInput {
+  title: string;
+  text: string;
+}
+
+export type CustomTextValidation =
+  | { ok: true; title: string; text: string }
+  | { ok: false; error: string };
+
+export interface CustomTextAudioInput extends CustomTextInput {
+  libraryDir: string;
+  synthesize: (request: TtsRequest) => Promise<TtsResult>;
+  enableAlignment?: boolean;
+  now?: () => Date;
+}
+
+export interface CustomTextAudioResult {
+  status: "created";
+  libraryItem: LibraryItem;
 }
 
 export async function handleArticleDecision(
@@ -128,6 +150,78 @@ export function providerSynthesizer(provider: TtsProvider): ArticleDecisionInput
   return (request) => provider.synthesize(request);
 }
 
+export async function createCustomTextAudio(
+  input: CustomTextAudioInput,
+): Promise<CustomTextAudioResult> {
+  const validation = validateCustomTextInput(input);
+  if (!validation.ok) {
+    throw new Error(validation.error);
+  }
+
+  const now = input.now?.() ?? new Date();
+  const slug = sanitizeSlug(`${validation.title}-${now.toISOString()}`);
+  const story = customTextStory(validation.title, validation.text, slug, now);
+  const textDir = join(input.libraryDir, "text");
+  const storyDir = join(input.libraryDir, "stories");
+  const audioDir = join(input.libraryDir, "audio");
+  await mkdir(textDir, { recursive: true });
+  await mkdir(storyDir, { recursive: true });
+  await mkdir(audioDir, { recursive: true });
+
+  const textPath = join(textDir, `${slug}.txt`);
+  const jsonPath = join(storyDir, `${slug}.json`);
+  const audioPath = join(audioDir, `${slug}.mp3`);
+
+  await writeFile(textPath, `${story.title}\n\n${story.text}\n`, "utf8");
+  await writeFile(jsonPath, `${JSON.stringify(story, null, 2)}\n`, "utf8");
+  const ttsResult = await input.synthesize({
+    title: story.title,
+    text: story.text,
+    outputPath: audioPath,
+    allowOverBudget: false,
+  });
+  const alignment = input.enableAlignment
+    ? await tryWriteAlignment(input.libraryDir, slug, ttsResult.outputPath)
+    : undefined;
+
+  const manifest = await appendLibraryItem(input.libraryDir, {
+    slug,
+    title: story.title,
+    sourceUrl: story.sourceUrl,
+    audioPath: ttsResult.outputPath,
+    jsonPath,
+    textPath,
+    alignmentPath: alignment?.alignmentPath,
+    alignmentUrl: alignment?.alignmentUrl,
+    hasAlignment: Boolean(alignment),
+    publishedAt: now.toUTCString(),
+    generatedAt: now.toISOString(),
+    estimatedCostUsd: ttsResult.estimatedCostUsd,
+    wordCount: story.wordCount,
+    characterCount: story.characterCount,
+  });
+
+  return { status: "created", libraryItem: manifest.items[0] };
+}
+
+export function validateCustomTextInput(input: CustomTextInput): CustomTextValidation {
+  const title = input.title.trim();
+  const text = input.text.trim();
+  if (!title) {
+    return { ok: false, error: "Enter a title." };
+  }
+  if (title.length > 160) {
+    return { ok: false, error: "Title must be 160 characters or less." };
+  }
+  if (!text) {
+    return { ok: false, error: "Enter text to convert." };
+  }
+  if (text.length > 60000) {
+    return { ok: false, error: "Text must be 60,000 characters or less." };
+  }
+  return { ok: true, title, text };
+}
+
 export async function refreshLibraryArticle(
   input: RefreshLibraryArticleInput,
 ): Promise<RefreshLibraryArticleResult> {
@@ -213,6 +307,23 @@ function findSeenArticle(state: PirateRadioState, slug: string): PirateArticle |
 
 function articleSlug(article: PirateArticle): string {
   return article.slug ?? basename(new URL(article.url).pathname);
+}
+
+function customTextStory(title: string, text: string, slug: string, now: Date): Story {
+  const paragraphs = text.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+  const contentBlocks: StoryContentBlock[] = paragraphs.map((paragraph) => ({
+    type: "paragraph",
+    text: paragraph,
+  }));
+  return {
+    sourceUrl: `custom-text://local/${slug}`,
+    title,
+    text,
+    contentBlocks,
+    wordCount: text.split(/\s+/).filter(Boolean).length,
+    characterCount: text.length,
+    extractedAt: now.toISOString(),
+  };
 }
 
 async function tryCacheStoryImage(

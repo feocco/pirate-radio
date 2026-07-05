@@ -44,6 +44,9 @@ const sharedCss = `
   .pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 22px 0 64px; }
   .url-queue { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin: 24px auto 0; padding-bottom: 20px; border-bottom: 2px solid var(--line); }
   .url-queue .search { width: 100%; min-width: 0; }
+  .text-queue { display: grid; grid-template-columns: minmax(180px, 280px) 1fr auto; gap: 10px; margin: 14px auto 0; padding-bottom: 20px; border-bottom: 2px solid var(--line); }
+  .text-queue .search { width: 100%; min-width: 0; }
+  .textarea { min-height: 86px; resize: vertical; padding: 11px 12px; border: 2px solid var(--line); background: #fff; font: inherit; font-weight: 700; }
   .status { grid-column: 1 / -1; min-height: 20px; color: var(--muted); font-weight: 900; }
   .status.error { color: #9d1111; }
   .backlog-summary { color: var(--muted); font-weight: 900; }
@@ -76,7 +79,7 @@ const sharedCss = `
     .topbar a { border-right: 0; border-bottom: 1px solid #666; }
     .brandbar { padding: 14px 16px; }
     .item { grid-template-columns: 1fr; }
-    .url-queue { grid-template-columns: 1fr; }
+    .url-queue, .text-queue { grid-template-columns: 1fr; }
     .backlog-row { grid-template-columns: 1fr; }
     .backlog-row .actions { justify-content: flex-start; min-width: 0; }
     .article-meta, .admin-row { display: block; }
@@ -248,6 +251,12 @@ export function renderBacklogHtml(): string {
     <button id="queue-url" class="button" type="submit">Convert URL</button>
     <div id="url-status" class="status" role="status"></div>
   </form>
+  <form id="text-queue" class="text-queue wrap">
+    <input id="custom-title" class="search" type="text" maxlength="160" placeholder="Custom text title" aria-label="Custom text title">
+    <textarea id="custom-text" class="textarea" maxlength="60000" placeholder="Paste text to convert" aria-label="Paste text to convert"></textarea>
+    <button id="queue-text" class="button" type="submit">Convert Text</button>
+    <div id="text-status" class="status" role="status"></div>
+  </form>
   <section class="toolbar wrap">
     <input id="search" class="search" type="search" placeholder="Search title, author, or description" aria-label="Search backlog">
     <label class="toggle"><input id="show-all" type="checkbox"> All recent</label>
@@ -272,6 +281,11 @@ export function renderBacklogHtml(): string {
     const articleUrl = document.getElementById("article-url");
     const queueUrlButton = document.getElementById("queue-url");
     const urlStatus = document.getElementById("url-status");
+    const textForm = document.getElementById("text-queue");
+    const customTitle = document.getElementById("custom-title");
+    const customText = document.getElementById("custom-text");
+    const queueTextButton = document.getElementById("queue-text");
+    const textStatus = document.getElementById("text-status");
     let items = [];
     let pageIndex = 0;
     let pollTimer;
@@ -401,6 +415,34 @@ export function renderBacklogHtml(): string {
       }
     }
 
+    async function queueText(event) {
+      event.preventDefault();
+      textStatus.className = "status";
+      textStatus.textContent = "";
+      queueTextButton.disabled = true;
+      queueTextButton.textContent = "Queueing";
+      try {
+        const response = await fetch("/backlog/convert-text", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: customTitle.value, text: customText.value }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Could not queue custom text.");
+        }
+        textStatus.textContent = "Queued. You will get a notification when audio is ready.";
+        customTitle.value = "";
+        customText.value = "";
+      } catch (error) {
+        textStatus.className = "status error";
+        textStatus.textContent = error.message;
+      } finally {
+        queueTextButton.disabled = false;
+        queueTextButton.textContent = "Convert Text";
+      }
+    }
+
     function schedulePolling() {
       clearInterval(pollTimer);
       if (items.some((item) => item.processing)) {
@@ -413,6 +455,7 @@ export function renderBacklogHtml(): string {
     prev.addEventListener("click", () => { pageIndex -= 1; render(); });
     next.addEventListener("click", () => { pageIndex += 1; render(); });
     urlForm.addEventListener("submit", queueUrl);
+    textForm.addEventListener("submit", queueText);
     loadBacklog().catch((error) => {
       root.textContent = error.message;
     });

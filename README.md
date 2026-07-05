@@ -1,8 +1,8 @@
 # Pirate Wires Reader
 
 Local CLI and Tailnet reader for extracting logged-in Pirate Wires stories,
-generating OpenAI text-to-speech audio, and reading generated articles with
-cached art.
+queueing pasted text, generating OpenAI text-to-speech audio, and reading
+generated audio with cached article art where available.
 
 ## Setup
 
@@ -108,7 +108,7 @@ The reader serves:
   `/openapi.json` for the OpenAPI 3.1 document.
 - `/backlog` for recent RSS articles that have not been converted yet, with
   search, pagination, async conversion buttons, and a pasted Pirate Wires URL
-  queue.
+  queue plus custom text entry.
 - `/article/<slug>` for a dedicated article page with audio and full text.
 - `/progress/<slug>` for cross-device playback position.
 - `/audio/<slug>.mp3`, `/images/<slug>.<ext>`, and optional
@@ -117,7 +117,9 @@ The reader serves:
 The backlog list is RSS-window-only in v1. It compares the current feed against
 the library manifest, then queues selected articles through the same approval,
 extraction, TTS, and notification workflow used by mobile actions. Pasted
-`piratewires.com/p/...` URLs can also be queued from the backlog page.
+`piratewires.com/p/...` URLs can also be queued from the backlog page. Custom
+title/text entries bypass Pirate Wires extraction and write directly into the
+same reader library after TTS generation.
 
 Set `PIRATE_RADIO_ENABLE_ALIGNMENT=true` to prototype word-level highlighting.
 When enabled, the service runs a post-TTS `whisper-1` transcription with word

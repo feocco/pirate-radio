@@ -24,7 +24,13 @@ import { renderAdminHtml, renderArticleHtml, renderBacklogHtml, renderReaderHtml
 import { getPirateRadioOpenApiDocument, renderPirateRadioDocsHtml } from "./serviceDocs.js";
 import { readState, seenArticleIds, writeState, type PirateRadioState } from "./state.js";
 import { createTtsProvider } from "./tts/index.js";
-import { handleArticleDecision, providerSynthesizer, refreshLibraryArticle } from "./workflow.js";
+import {
+  createCustomTextAudio,
+  handleArticleDecision,
+  providerSynthesizer,
+  refreshLibraryArticle,
+  validateCustomTextInput,
+} from "./workflow.js";
 
 export interface PirateRadioServiceOptions {
   config: PirateRadioConfig;
@@ -259,6 +265,56 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
           ok: false,
           status: "invalid_url",
           error: "Enter a valid URL.",
+        });
+      }
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/backlog/convert-text") {
+      try {
+        const body = await readJsonBody(request);
+        const validation = validateCustomTextInput({
+          title: String(body.title ?? ""),
+          text: String(body.text ?? ""),
+        });
+        if (!validation.ok) {
+          json(response, 400, { ok: false, status: "invalid_text", error: validation.error });
+          return;
+        }
+        const provider = createTtsProvider("openai");
+        void createCustomTextAudio({
+          title: validation.title,
+          text: validation.text,
+          libraryDir: options.config.libraryDir,
+          synthesize: providerSynthesizer(provider),
+          enableAlignment: options.config.enableAlignment,
+        })
+          .then((result) =>
+            sendNotification(
+              buildArticleReadyNotification(result.libraryItem, options.config.publicBaseUrl),
+            ),
+          )
+          .catch((error) =>
+            sendNotification(
+              buildArticleFailureNotification(
+                {
+                  id: `custom-text:${validation.title}`,
+                  title: validation.title,
+                  url: `custom-text://local/${encodeURIComponent(validation.title)}`,
+                  author: "",
+                  publishedAt: "",
+                  description: "",
+                },
+                error,
+                options.config.publicBaseUrl,
+              ),
+            ),
+          );
+        json(response, 200, { ok: true, status: "queued" });
+      } catch {
+        json(response, 400, {
+          ok: false,
+          status: "invalid_text",
+          error: "Enter text to convert.",
         });
       }
       return;
