@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
@@ -32,6 +32,29 @@ describe("playback progress", () => {
   });
 
   test("returns undefined for stories without saved progress", async () => {
+    await expect(readPlaybackProgress(tempDir, "missing-story")).resolves.toBeUndefined();
+  });
+
+  test("treats corrupt progress JSON as empty instead of throwing", async () => {
+    await writeFile(progressPath(tempDir), '{"version":1}\n-trailing-garbage', "utf8");
+
+    await expect(readPlaybackProgress(tempDir, "missing-story")).resolves.toBeUndefined();
+  });
+
+  test("replaces corrupt progress JSON on the next write", async () => {
+    await writeFile(progressPath(tempDir), '{"version":1}\n-trailing-garbage', "utf8");
+
+    await writePlaybackProgress(tempDir, "recovered-story", { positionSeconds: 12 });
+
+    const raw = await readFile(progressPath(tempDir), "utf8");
+    expect(JSON.parse(raw).users.default["recovered-story"]).toMatchObject({
+      positionSeconds: 12,
+    });
+  });
+
+  test("treats malformed progress schema as empty instead of throwing", async () => {
+    await writeFile(progressPath(tempDir), '{"version":1,"users":[]}', "utf8");
+
     await expect(readPlaybackProgress(tempDir, "missing-story")).resolves.toBeUndefined();
   });
 });
