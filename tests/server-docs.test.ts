@@ -85,4 +85,21 @@ describe("service docs endpoints", () => {
     expect(body.paths["/progress/{slug}"]).toBeDefined();
     expect(body.paths["/docs"]).toBeDefined();
   });
+
+  test("POST /backlog/convert-text validates large pasted text instead of failing body parsing", async () => {
+    const baseUrl = await startServer();
+
+    const response = await fetch(`${baseUrl}/backlog/convert-text`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Large Article", text: "x".repeat(60001) }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      status: "invalid_text",
+      error: "Text must be 60,000 characters or less.",
+    });
+  });
 });

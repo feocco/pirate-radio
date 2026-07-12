@@ -32,6 +32,8 @@ import {
   validateCustomTextInput,
 } from "./workflow.js";
 
+const MAX_JSON_BODY_CHARS = 128_000;
+
 export interface PirateRadioServiceOptions {
   config: PirateRadioConfig;
   notifier?: Notifier;
@@ -310,11 +312,14 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
             ),
           );
         json(response, 200, { ok: true, status: "queued" });
-      } catch {
+      } catch (error) {
         json(response, 400, {
           ok: false,
           status: "invalid_text",
-          error: "Enter text to convert.",
+          error:
+            error instanceof Error && error.message === "Request body too large"
+              ? "Request body too large."
+              : "Enter text to convert.",
         });
       }
       return;
@@ -575,7 +580,7 @@ async function readJsonBody(request: IncomingMessage): Promise<Record<string, un
   let body = "";
   for await (const chunk of request) {
     body += chunk;
-    if (body.length > 4096) {
+    if (body.length > MAX_JSON_BODY_CHARS) {
       throw new Error("Request body too large");
     }
   }

@@ -393,6 +393,60 @@ const pirateRadioOpenApi = {
         },
       },
     },
+    "/backlog/convert-text": {
+      post: {
+        tags: ["backlog"],
+        summary: "Queue conversion for pasted custom text",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", maxLength: 160 },
+                  text: { type: "string", maxLength: 60000 },
+                },
+                required: ["title", "text"],
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "The pasted text was accepted and queued.",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    ok: { type: "boolean", const: true },
+                    status: { type: "string", const: "queued" },
+                  },
+                  required: ["ok", "status"],
+                },
+              },
+            },
+          },
+          "400": {
+            description: "The pasted text is missing, too large, or otherwise invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    ok: { type: "boolean", const: false },
+                    status: { type: "string", const: "invalid_text" },
+                    error: { type: "string" },
+                  },
+                  required: ["ok", "status", "error"],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     "/audio/{filename}": {
       get: {
         tags: ["library"],

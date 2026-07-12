@@ -46,7 +46,7 @@ const sharedCss = `
   .url-queue .search { width: 100%; min-width: 0; }
   .text-queue { display: grid; grid-template-columns: minmax(180px, 280px) 1fr auto; gap: 10px; margin: 14px auto 0; padding-bottom: 20px; border-bottom: 2px solid var(--line); }
   .text-queue .search { width: 100%; min-width: 0; }
-  .textarea { min-height: 86px; resize: vertical; padding: 11px 12px; border: 2px solid var(--line); background: #fff; font: inherit; font-weight: 700; }
+  .textarea { min-height: 180px; resize: vertical; padding: 11px 12px; border: 2px solid var(--line); background: #fff; font: inherit; font-weight: 700; }
   .status { grid-column: 1 / -1; min-height: 20px; color: var(--muted); font-weight: 900; }
   .status.error { color: #9d1111; }
   .backlog-summary { color: var(--muted); font-weight: 900; }
