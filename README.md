@@ -103,7 +103,8 @@ after login.
 
 The reader serves:
 
-- `/` for the audio library with cached article art.
+- `/` for the audio library with cached article art, source filtering, and
+  conversion-time sorting by default.
 - `/docs` for a browser-friendly summary of the service HTTP contract and
   `/openapi.json` for the OpenAPI 3.1 document.
 - `/queue` for recent RSS articles that have not been converted yet, with

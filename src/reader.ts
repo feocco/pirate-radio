@@ -40,6 +40,7 @@ const sharedCss = `
   .badge { display: inline-block; padding: 9px 13px; border: 1px solid var(--line); font-weight: 900; }
   .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: 24px auto 0; }
   .search { min-width: min(100%, 320px); padding: 11px 12px; border: 2px solid var(--line); background: #fff; font: inherit; font-weight: 700; }
+  .select { min-width: 190px; padding: 11px 12px; border: 2px solid var(--line); background: #fff; font: inherit; font-weight: 900; }
   .toggle { display: flex; align-items: center; gap: 8px; font-weight: 900; }
   .pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 22px 0 64px; }
   .url-queue { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin: 24px auto 0; padding-bottom: 20px; border-bottom: 2px solid var(--line); }
@@ -80,6 +81,8 @@ const sharedCss = `
     .navlink + .navlink { border-left: 1px solid #666; }
     .brandbar { padding: 14px 16px; }
     .item { grid-template-columns: 1fr; }
+    .toolbar { align-items: stretch; }
+    .select { width: 100%; }
     .url-queue, .text-queue { grid-template-columns: 1fr; }
     .queue-row { grid-template-columns: 1fr; }
     .queue-row .actions { justify-content: flex-start; min-width: 0; }
@@ -104,11 +107,24 @@ export function renderReaderHtml(): string {
     <h1>Pirate Radio</h1>
     <p class="deck">A private Pirate Wires audio shelf with saved playback, cached art, and the full article one tap away.</p>
   </section>
+  <section class="toolbar wrap" aria-label="Library controls">
+    <select id="source-filter" class="select" aria-label="Filter by source">
+      <option value="">All sources</option>
+    </select>
+    <select id="sort-order" class="select" aria-label="Sort library">
+      <option value="generated-desc">Newest conversion</option>
+      <option value="published-desc">Article date</option>
+      <option value="title-asc">Title</option>
+    </select>
+  </section>
   <main id="library" class="library wrap">Loading...</main>
   <script>
     const root = document.getElementById("library");
+    const sourceFilter = document.getElementById("source-filter");
+    const sortOrder = document.getElementById("sort-order");
     const keyFor = (slug) => "pirate-radio-position:" + slug;
     const progressTimers = new Map();
+    let libraryItems = [];
 
     function text(value) {
       return value == null ? "" : String(value);
@@ -156,73 +172,129 @@ export function renderReaderHtml(): string {
       }
     }
 
+    function timestamp(value) {
+      const parsed = Date.parse(value || "");
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function sourceName(item) {
+      return text(item.sourceName || "Unknown Source");
+    }
+
+    function populateSourceFilter(items) {
+      const selected = sourceFilter.value;
+      const sources = Array.from(new Set(items.map(sourceName))).sort((left, right) => left.localeCompare(right));
+      sourceFilter.textContent = "";
+      const all = document.createElement("option");
+      all.value = "";
+      all.textContent = "All sources";
+      sourceFilter.append(all);
+      for (const source of sources) {
+        const option = document.createElement("option");
+        option.value = source;
+        option.textContent = source;
+        sourceFilter.append(option);
+      }
+      sourceFilter.value = sources.includes(selected) ? selected : "";
+    }
+
+    function filterLibraryItems(items) {
+      const selectedSource = sourceFilter.value;
+      return selectedSource ? items.filter((item) => sourceName(item) === selectedSource) : items;
+    }
+
+    function sortLibraryItems(items) {
+      const sorted = [...items];
+      if (sortOrder.value === "published-desc") {
+        sorted.sort((left, right) => timestamp(right.publishedAt) - timestamp(left.publishedAt));
+      } else if (sortOrder.value === "title-asc") {
+        sorted.sort((left, right) => text(left.title).localeCompare(text(right.title)));
+      } else {
+        sorted.sort((left, right) => timestamp(right.generatedAt) - timestamp(left.generatedAt));
+      }
+      return sorted;
+    }
+
+    function renderLibrary() {
+      root.textContent = "";
+      const visibleItems = sortLibraryItems(filterLibraryItems(libraryItems));
+      if (visibleItems.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = libraryItems.length === 0 ? "No audio yet." : "No audio for this source yet.";
+        root.append(empty);
+        return;
+      }
+      for (const item of visibleItems) {
+        renderLibraryItem(item);
+      }
+    }
+
+    function renderLibraryItem(item) {
+      const section = document.createElement("section");
+      section.className = "item";
+
+      let image;
+      if (item.imageUrl) {
+        image = document.createElement("img");
+        image.className = "thumb";
+        image.src = item.imageUrl;
+        image.alt = "";
+        image.loading = "lazy";
+      } else {
+        image = document.createElement("div");
+        image.className = "thumb placeholder";
+        image.textContent = "PW";
+      }
+
+      const content = document.createElement("div");
+      const heading = document.createElement("h2");
+      heading.textContent = item.title;
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = [sourceName(item), item.publishedAt, item.wordCount ? item.wordCount + " words" : ""].filter(Boolean).join(" - ");
+      const tagline = document.createElement("p");
+      tagline.className = "tagline";
+      tagline.textContent = text(item.tagline);
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const readLink = document.createElement("a");
+      readLink.className = "readlink";
+      readLink.href = "/article/" + encodeURIComponent(item.slug);
+      readLink.textContent = "Read";
+      const downloadLink = document.createElement("a");
+      downloadLink.className = "readlink";
+      downloadLink.href = item.audioUrl;
+      downloadLink.download = item.slug + ".mp3";
+      downloadLink.textContent = "Download MP3";
+      const audio = document.createElement("audio");
+      audio.controls = true;
+      audio.preload = "metadata";
+      audio.src = item.audioUrl;
+      audio.addEventListener("loadedmetadata", () => restoreProgress(item.slug, audio));
+      audio.addEventListener("timeupdate", () => saveProgress(item.slug, audio));
+      audio.addEventListener("pause", () => saveProgress(item.slug, audio, true));
+      audio.addEventListener("ended", () => saveProgress(item.slug, audio, true));
+      window.addEventListener("pagehide", () => saveProgress(item.slug, audio, true));
+      actions.append(readLink, downloadLink);
+      content.append(heading, meta);
+      if (item.tagline) content.append(tagline);
+      content.append(actions, audio);
+      section.append(image, content);
+      root.append(section);
+    }
+
     async function loadLibrary() {
       const response = await fetch("/library.json", { cache: "no-store" });
       if (!response.ok) throw new Error("Could not load library");
       const manifest = await response.json();
-      root.textContent = "";
-      if (!manifest.items || manifest.items.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "empty";
-        empty.textContent = "No audio yet.";
-        root.append(empty);
-        return;
-      }
-      for (const item of manifest.items) {
-        const section = document.createElement("section");
-        section.className = "item";
-
-        let image;
-        if (item.imageUrl) {
-          image = document.createElement("img");
-          image.className = "thumb";
-          image.src = item.imageUrl;
-          image.alt = "";
-          image.loading = "lazy";
-        } else {
-          image = document.createElement("div");
-          image.className = "thumb placeholder";
-          image.textContent = "PW";
-        }
-
-        const content = document.createElement("div");
-        const heading = document.createElement("h2");
-        heading.textContent = item.title;
-        const meta = document.createElement("div");
-        meta.className = "meta";
-        meta.textContent = [item.sourceName, item.publishedAt, item.wordCount ? item.wordCount + " words" : ""].filter(Boolean).join(" - ");
-        const tagline = document.createElement("p");
-        tagline.className = "tagline";
-        tagline.textContent = text(item.tagline);
-        const actions = document.createElement("div");
-        actions.className = "actions";
-        const readLink = document.createElement("a");
-        readLink.className = "readlink";
-        readLink.href = "/article/" + encodeURIComponent(item.slug);
-        readLink.textContent = "Read";
-        const downloadLink = document.createElement("a");
-        downloadLink.className = "readlink";
-        downloadLink.href = item.audioUrl;
-        downloadLink.download = item.slug + ".mp3";
-        downloadLink.textContent = "Download MP3";
-        const audio = document.createElement("audio");
-        audio.controls = true;
-        audio.preload = "metadata";
-        audio.src = item.audioUrl;
-        audio.addEventListener("loadedmetadata", () => restoreProgress(item.slug, audio));
-        audio.addEventListener("timeupdate", () => saveProgress(item.slug, audio));
-        audio.addEventListener("pause", () => saveProgress(item.slug, audio, true));
-        audio.addEventListener("ended", () => saveProgress(item.slug, audio, true));
-        window.addEventListener("pagehide", () => saveProgress(item.slug, audio, true));
-        actions.append(readLink, downloadLink);
-        content.append(heading, meta);
-        if (item.tagline) content.append(tagline);
-        content.append(actions, audio);
-        section.append(image, content);
-        root.append(section);
-      }
+      libraryItems = Array.isArray(manifest.items) ? manifest.items : [];
+      populateSourceFilter(libraryItems);
+      renderLibrary();
     }
 
+    sourceFilter.addEventListener("change", renderLibrary);
+    sortOrder.addEventListener("change", renderLibrary);
     loadLibrary().catch((error) => {
       root.textContent = error.message;
     });

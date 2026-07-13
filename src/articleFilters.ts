@@ -18,6 +18,34 @@ export function filterVoiceExcludedLibraryManifest(
 ): LibraryManifest {
   return {
     ...manifest,
-    items: manifest.items.filter((item) => !isVoiceExcludedTitle(item.title)),
+    items: manifest.items
+      .filter((item) => !isVoiceExcludedTitle(item.title))
+      .map((item) => ({
+        ...item,
+        sourceName: item.sourceName ?? sourceNameFromUrl(item.sourceUrl),
+      }))
+      .sort((left, right) => Date.parse(right.generatedAt) - Date.parse(left.generatedAt)),
   };
+}
+
+function sourceNameFromUrl(sourceUrl: string): string | undefined {
+  try {
+    const url = new URL(sourceUrl);
+    if (url.hostname === "www.hyperdimensional.co" || url.hostname === "hyperdimensional.co") {
+      return "Hyperdimensional";
+    }
+    if (
+      url.hostname === "www.piratewires.com" ||
+      url.hostname === "piratewires.com" ||
+      url.hostname === "piratewires.substack.com"
+    ) {
+      return "Pirate Wires";
+    }
+    if (url.protocol === "custom-text:") {
+      return "Custom Text";
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }

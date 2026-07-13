@@ -18,6 +18,12 @@ describe("reader page", () => {
     expect(html).toContain("pirate-radio-position:");
     expect(html).toContain("/progress/");
     expect(html).toContain("saveProgress");
+    expect(html).toContain("source-filter");
+    expect(html).toContain("sort-order");
+    expect(html).toContain("filterLibraryItems");
+    expect(html).toContain("sortLibraryItems");
+    expect(html).toContain("Newest conversion");
+    expect(html).toContain("Article date");
     expect(html).toContain("item.imageUrl");
     expect(html).toContain('"/article/" + encodeURIComponent(item.slug)');
     expect(html).toContain("downloadLink.download = item.slug + \".mp3\"");

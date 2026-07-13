@@ -56,6 +56,48 @@ describe("library visibility filters", () => {
     expect(manifest.items.map((item) => item.title)).toContain("Monday: Three Morning Takes");
     expect(visible.items.map((item) => item.title)).toEqual(["A Regular Article"]);
   });
+
+  test("sorts visible items by conversion time and infers legacy source names", () => {
+    const visible = filterVoiceExcludedLibraryManifest({
+      version: 1,
+      updatedAt: "2026-07-13T00:00:00.000Z",
+      items: [
+        {
+          slug: "older",
+          title: "Older Pirate Story",
+          sourceUrl: "https://www.piratewires.com/p/older",
+          publishedAt: "Mon, 13 Jul 2026 00:00:00 GMT",
+          generatedAt: "2026-07-13T01:00:00.000Z",
+          audioPath: "/audio/older.mp3",
+          audioUrl: "/audio/older.mp3",
+          jsonPath: "/stories/older.json",
+          textPath: "/text/older.txt",
+          estimatedCostUsd: 0.01,
+          wordCount: 100,
+          characterCount: 500,
+          audioBytes: 100,
+        },
+        {
+          slug: "newer",
+          title: "Newer Hyper Story",
+          sourceUrl: "https://www.hyperdimensional.co/p/newer",
+          publishedAt: "Fri, 26 Jun 2026 00:00:00 GMT",
+          generatedAt: "2026-07-13T02:00:00.000Z",
+          audioPath: "/audio/newer.mp3",
+          audioUrl: "/audio/newer.mp3",
+          jsonPath: "/stories/newer.json",
+          textPath: "/text/newer.txt",
+          estimatedCostUsd: 0.01,
+          wordCount: 100,
+          characterCount: 500,
+          audioBytes: 100,
+        },
+      ],
+    });
+
+    expect(visible.items.map((item) => item.slug)).toEqual(["newer", "older"]);
+    expect(visible.items.map((item) => item.sourceName)).toEqual(["Hyperdimensional", "Pirate Wires"]);
+  });
 });
 
 describe("library manifest", () => {
