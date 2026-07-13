@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 export interface LibraryItem {
@@ -34,6 +34,7 @@ export interface LibraryManifest {
 }
 
 export type NewLibraryItem = Omit<LibraryItem, "audioUrl" | "audioBytes">;
+const manifestWriteQueues = new Map<string, Promise<LibraryManifest>>();
 
 export async function readLibraryManifest(libraryDir: string): Promise<LibraryManifest> {
   try {
@@ -47,6 +48,20 @@ export async function readLibraryManifest(libraryDir: string): Promise<LibraryMa
 }
 
 export async function appendLibraryItem(
+  libraryDir: string,
+  item: NewLibraryItem,
+): Promise<LibraryManifest> {
+  const previous = manifestWriteQueues.get(libraryDir) ?? Promise.resolve({ version: 1 as const, updatedAt: new Date(0).toISOString(), items: [] });
+  const next = previous.catch(() => ({ version: 1 as const, updatedAt: new Date(0).toISOString(), items: [] })).then(() => appendLibraryItemLocked(libraryDir, item));
+  manifestWriteQueues.set(libraryDir, next);
+  try {
+    return await next;
+  } finally {
+    if (manifestWriteQueues.get(libraryDir) === next) manifestWriteQueues.delete(libraryDir);
+  }
+}
+
+async function appendLibraryItemLocked(
   libraryDir: string,
   item: NewLibraryItem,
 ): Promise<LibraryManifest> {
@@ -64,7 +79,10 @@ export async function appendLibraryItem(
     updatedAt: new Date().toISOString(),
     items,
   };
-  await writeFile(manifestPath(libraryDir), `${JSON.stringify(nextManifest, null, 2)}\n`, "utf8");
+  const target = manifestPath(libraryDir);
+  const temporary = `${target}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(nextManifest, null, 2)}\n`, "utf8");
+  await rename(temporary, target);
   return nextManifest;
 }
 

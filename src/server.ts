@@ -7,7 +7,9 @@ import { buildBacklogItems, queueBacklogConversion, queueBacklogUrlConversion } 
 import { filterVoiceExcludedLibraryManifest } from "./articleFilters.js";
 import { fetchArticleFeeds, detectNewArticles } from "./feed.js";
 import { extractStoryFromUrl } from "./browser.js";
-import type { PirateRadioConfig } from "./config.js";
+import { OidcAuthenticator, ForbiddenIdentityError, originAllowed, sendAuthenticationRequired, type AuthenticatedRequest, type Authenticator } from "./auth.js";
+import { validateIdentityConfig, type PirateRadioConfig } from "./config.js";
+import { PirateRadioDatabase, type PirateRadioStore } from "./database.js";
 import { HomeAssistantActionListener } from "./haActions.js";
 import { readLibraryManifest } from "./library.js";
 import {
@@ -19,7 +21,6 @@ import {
   type PirateRadioDecision,
 } from "./notifications.js";
 import { HomelabFunctionsNotifier, type Notifier } from "./notifier.js";
-import { readPlaybackProgress, writePlaybackProgress } from "./progress.js";
 import { renderAdminHtml, renderArticleHtml, renderBacklogHtml, renderReaderHtml } from "./reader.js";
 import { getPirateRadioOpenApiDocument, renderPirateRadioDocsHtml } from "./serviceDocs.js";
 import {
@@ -43,14 +44,18 @@ const MAX_JSON_BODY_CHARS = 128_000;
 export interface PirateRadioServiceOptions {
   config: PirateRadioConfig;
   notifier?: Notifier;
+  database?: PirateRadioDatabase;
+  authenticator?: Authenticator;
 }
 
-interface PirateRadioRequestHandlerOptions {
+export interface PirateRadioRequestHandlerOptions {
   config: PirateRadioConfig;
   getState?: () => Promise<PirateRadioState>;
-  decide?: (slug: string, decision: PirateRadioDecision) => Promise<void>;
+  decide?: (slug: string, decision: PirateRadioDecision, submissionId?: string) => Promise<void>;
   processingSlugs?: Set<string>;
   sendNotification?: (notification: ArticleNotification) => Promise<void>;
+  store: PirateRadioStore;
+  authenticator: Authenticator;
 }
 
 export class PirateRadioService {
@@ -60,6 +65,8 @@ export class PirateRadioService {
   private readonly actionListener: HomeAssistantActionListener;
   private readonly failureNotifications = new Set<string>();
   private readonly processingBacklogSlugs = new Set<string>();
+  private database?: PirateRadioDatabase;
+  private authenticator?: Authenticator;
 
   constructor(private readonly options: PirateRadioServiceOptions) {
     this.notifier =
@@ -76,17 +83,28 @@ export class PirateRadioService {
   }
 
   async start(): Promise<void> {
+    validateIdentityConfig(this.options.config);
     await mkdir(this.options.config.libraryDir, { recursive: true });
     this.state = await readState(this.options.config.statePath);
+    this.database = this.options.database ?? new PirateRadioDatabase(this.options.config.databaseUrl!);
+    await this.database.migrate();
+    this.authenticator = this.options.authenticator ?? new OidcAuthenticator(this.options.config, this.database);
+    await this.authenticator.initialize();
     const requestHandler = createPirateRadioRequestHandler({
       config: this.options.config,
       getState: () => this.getState(),
       decide: (slug, decision) => this.decide(slug, decision),
       processingSlugs: this.processingBacklogSlugs,
       sendNotification: (notification) => this.sendNotification(notification),
+      store: this.database,
+      authenticator: this.authenticator,
     });
     const server = createServer((request, response) => {
-      void requestHandler(request, response);
+      void requestHandler(request, response).catch((error) => {
+        console.error("[pirate-radio] request failed", error);
+        if (!response.headersSent) json(response, 500, { error: "internal_error" });
+        else response.end();
+      });
     });
     server.listen(this.options.config.port, this.options.config.host, () => {
       console.log(
@@ -128,9 +146,20 @@ export class PirateRadioService {
     await writeState(this.options.config.statePath, state);
   }
 
-  async decide(slug: string, decision: PirateRadioDecision): Promise<void> {
+  async decide(slug: string, decision: PirateRadioDecision, submissionId?: string): Promise<void> {
     const state = await this.getState();
     const provider = createTtsProvider("openai");
+    let effectiveSubmissionId = submissionId;
+    if (!effectiveSubmissionId && decision === "accept" && this.database) {
+      const article = findArticleBySlug(state, slug);
+      effectiveSubmissionId = (await this.database.createSubmission({
+        slug,
+        type: "automated",
+        title: article?.title,
+        sourceUrl: article?.url,
+      })).id;
+      await this.database.updateSubmission(effectiveSubmissionId, "processing");
+    }
     try {
       const result = await handleArticleDecision({
         decision,
@@ -142,6 +171,12 @@ export class PirateRadioService {
         enableAlignment: this.options.config.enableAlignment,
       });
       await writeState(this.options.config.statePath, state);
+      if (effectiveSubmissionId && this.database) {
+        await this.database.updateSubmission(effectiveSubmissionId, result.status === "accepted" ? "succeeded" : "failed", {
+          slug: result.libraryItem?.slug ?? slug,
+          ...(result.status === "accepted" ? {} : { error: result.status }),
+        });
+      }
       if (decision === "accept" && result.libraryItem) {
         await this.sendNotification(
           buildArticleReadyNotification(result.libraryItem, this.options.config.publicBaseUrl),
@@ -150,6 +185,9 @@ export class PirateRadioService {
       console.log(`[pirate-radio] decision ${decision} for ${slug}: ${result.status}`);
     } catch (error) {
       await writeState(this.options.config.statePath, state);
+      if (effectiveSubmissionId && this.database) {
+        await this.database.updateSubmission(effectiveSubmissionId, "failed", { error: error instanceof Error ? error.message : String(error) });
+      }
       await this.notifyArticleFailure(slug, error);
       console.error(`[pirate-radio] decision ${decision} for ${slug} failed`, error);
     }
@@ -200,9 +238,57 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
     request: IncomingMessage,
     response: ServerResponse,
   ): Promise<void> {
-    const url = new URL(request.url ?? "/", "http://localhost");
+    const url = new URL(request.url ?? "/", options.config.publicBaseUrl);
     if (request.method === "GET" && url.pathname === "/health") {
       json(response, 200, { ok: true });
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/auth/login") {
+      const result = await options.authenticator.login(url);
+      response.writeHead(302, { location: result.location, "set-cookie": result.transactionCookie, "cache-control": "no-store" });
+      response.end();
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/auth/callback") {
+      try {
+        const result = await options.authenticator.callback(url, request.headers.cookie);
+        response.writeHead(302, {
+          location: result.returnTo,
+          "set-cookie": [result.sessionCookie, result.transactionCookie],
+          "cache-control": "no-store",
+        });
+        response.end();
+      } catch (error) {
+        if (error instanceof ForbiddenIdentityError) {
+          json(response, 403, { error: "membership_required" });
+        } else {
+          json(response, 400, { error: "invalid_oidc_callback" });
+        }
+      }
+      return;
+    }
+
+    if (!originAllowed(request, options.config.publicBaseUrl)) {
+      json(response, 403, { error: "invalid_origin" });
+      return;
+    }
+    const principal = await options.authenticator.authenticate(request.headers.cookie);
+    if (!principal) {
+      sendAuthenticationRequired(response, request);
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/auth/me") {
+      json(response, 200, publicPrincipal(principal));
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/auth/logout") {
+      const sessionCookie = await options.authenticator.logout(request.headers.cookie);
+      response.writeHead(204, { "set-cookie": sessionCookie, "cache-control": "no-store" });
+      response.end();
+      return;
+    }
+    if (adminPath(url.pathname) && !principal.isAdmin) {
+      json(response, 403, { error: "admin_required" });
       return;
     }
     if (request.method === "GET" && url.pathname === "/docs") {
@@ -214,15 +300,15 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       return;
     }
     if (request.method === "GET" && url.pathname === "/") {
-      html(response, renderReaderHtml());
+      html(response, renderReaderHtml(principal.user));
       return;
     }
     if (request.method === "GET" && (url.pathname === "/queue" || url.pathname === "/backlog")) {
-      html(response, renderBacklogHtml());
+      html(response, renderBacklogHtml(principal.user));
       return;
     }
     if (request.method === "GET" && url.pathname === "/admin") {
-      html(response, renderAdminHtml());
+      html(response, renderAdminHtml(principal.user));
       return;
     }
     if (request.method === "GET" && (url.pathname === "/queue.json" || url.pathname === "/backlog.json")) {
@@ -239,11 +325,23 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       });
       return;
     }
+    if (request.method === "GET" && url.pathname === "/submissions.json") {
+      json(response, 200, { version: 1, items: await options.store.submissions() });
+      return;
+    }
     if (request.method === "POST" && queueConvertSlug(url.pathname)) {
       const slug = decodeURIComponent(queueConvertSlug(url.pathname) ?? "");
       const articles = await fetchArticleFeeds(options.config.feeds);
       const manifest = await readLibraryManifest(options.config.libraryDir);
       const state = await getState();
+      const article = findArticleBySlug(state, slug) ?? articles.find((candidate) => candidate.slug === slug);
+      const submission = await options.store.createSubmission({
+        slug,
+        type: "feed",
+        title: article?.title,
+        sourceUrl: article?.url,
+        submittedBy: principal.user,
+      });
       const result = await queueBacklogConversion({
         slug,
         articles,
@@ -252,8 +350,14 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
         statePath: options.config.statePath,
         processingSlugs,
         writeState,
-        startConversion: (queuedSlug) => decide(queuedSlug, "accept"),
+        startConversion: async (queuedSlug) => {
+          await options.store.updateSubmission(submission.id, "processing");
+          await decide(queuedSlug, "accept", submission.id);
+        },
       });
+      if (result.status === "missing") await options.store.updateSubmission(submission.id, "failed", { error: "missing" });
+      if (result.status === "converted") await options.store.updateSubmission(submission.id, "succeeded");
+      if (result.status === "processing") await options.store.updateSubmission(submission.id, "processing");
       json(response, result.status === "missing" ? 404 : 200, result);
       return;
     }
@@ -263,17 +367,25 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
     ) {
       try {
         const body = await readJsonBody(request);
+        const submittedUrl = String(body.url ?? "");
+        const submission = await options.store.createSubmission({ type: "url", sourceUrl: submittedUrl, submittedBy: principal.user });
         const manifest = await readLibraryManifest(options.config.libraryDir);
         const state = await getState();
         const result = await queueBacklogUrlConversion({
-          url: String(body.url ?? ""),
+          url: submittedUrl,
           manifest,
           state,
           statePath: options.config.statePath,
           processingSlugs,
           writeState,
-          startConversion: (queuedSlug) => decide(queuedSlug, "accept"),
+          startConversion: async (queuedSlug) => {
+            await options.store.updateSubmission(submission.id, "processing", { slug: queuedSlug });
+            await decide(queuedSlug, "accept", submission.id);
+          },
         });
+        if (!result.ok) await options.store.updateSubmission(submission.id, "failed", { error: result.error });
+        if (result.ok && result.status === "converted") await options.store.updateSubmission(submission.id, "succeeded", { slug: result.slug });
+        if (result.ok && result.status === "processing") await options.store.updateSubmission(submission.id, "processing", { slug: result.slug });
         json(response, result.ok ? 200 : 400, result);
       } catch {
         json(response, 400, {
@@ -298,6 +410,12 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
           json(response, 400, { ok: false, status: "invalid_text", error: validation.error });
           return;
         }
+        const submission = await options.store.createSubmission({
+          type: "custom_text",
+          title: validation.title,
+          submittedBy: principal.user,
+        });
+        await options.store.updateSubmission(submission.id, "processing");
         const provider = createTtsProvider("openai");
         void createCustomTextAudio({
           title: validation.title,
@@ -306,13 +424,13 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
           synthesize: providerSynthesizer(provider),
           enableAlignment: options.config.enableAlignment,
         })
-          .then((result) =>
-            sendNotification(
-              buildArticleReadyNotification(result.libraryItem, options.config.publicBaseUrl),
-            ),
-          )
-          .catch((error) =>
-            sendNotification(
+          .then(async (result) => {
+            await options.store.updateSubmission(submission.id, "succeeded", { slug: result.libraryItem.slug });
+            await sendNotification(buildArticleReadyNotification(result.libraryItem, options.config.publicBaseUrl));
+          })
+          .catch(async (error) => {
+            await options.store.updateSubmission(submission.id, "failed", { error: error instanceof Error ? error.message : String(error) });
+            await sendNotification(
               buildArticleFailureNotification(
                 {
                   id: `custom-text:${validation.title}`,
@@ -325,8 +443,8 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
                 error,
                 options.config.publicBaseUrl,
               ),
-            ),
-          );
+            );
+          });
         json(response, 200, { ok: true, status: "queued" });
       } catch (error) {
         json(response, 400, {
@@ -341,12 +459,12 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       return;
     }
     if (request.method === "GET" && url.pathname.startsWith("/article/")) {
-      await renderArticle(response, options.config.libraryDir, decodeURIComponent(url.pathname));
+      await renderArticle(response, options.config.libraryDir, decodeURIComponent(url.pathname), options.store, principal.user);
       return;
     }
     if (request.method === "GET" && url.pathname.startsWith("/progress/")) {
       const slug = decodeURIComponent(url.pathname.slice("/progress/".length));
-      const progress = await readPlaybackProgress(options.config.libraryDir, slug);
+      const progress = await options.store.progress(principal.user.id, slug);
       json(response, progress ? 200 : 404, progress ?? { error: "progress_not_found" });
       return;
     }
@@ -354,11 +472,13 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       const slug = decodeURIComponent(url.pathname.slice("/progress/".length));
       try {
         const body = await readJsonBody(request);
-        const progress = await writePlaybackProgress(options.config.libraryDir, slug, {
-          positionSeconds: Number(body.positionSeconds),
-          durationSeconds:
-            body.durationSeconds == null ? undefined : Number(body.durationSeconds),
-        });
+        const progress = await options.store.saveProgress(
+          principal.user.id,
+          slug,
+          Number(body.positionSeconds),
+          body.durationSeconds == null ? undefined : Number(body.durationSeconds),
+          body.ended === true,
+        );
         json(response, 200, progress);
       } catch {
         json(response, 400, { error: "bad_progress" });
@@ -440,6 +560,21 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
   };
 }
 
+function adminPath(pathname: string): boolean {
+  return pathname === "/admin" || pathname.startsWith("/simulate/");
+}
+
+function publicPrincipal(principal: AuthenticatedRequest) {
+  return {
+    id: principal.user.id,
+    username: principal.user.username,
+    displayName: principal.user.displayName,
+    email: principal.user.email,
+    groups: principal.user.groups,
+    isAdmin: principal.isAdmin,
+  };
+}
+
 function findArticleBySlug(state: PirateRadioState, slug: string) {
   const articles = [
     ...Object.values(state.pending),
@@ -464,6 +599,8 @@ async function renderArticle(
   response: ServerResponse,
   libraryDir: string,
   pathname: string,
+  store: PirateRadioStore,
+  user: AuthenticatedRequest["user"],
 ): Promise<void> {
   const slug = basename(pathname);
   const manifest = await readLibraryManifest(libraryDir);
@@ -473,7 +610,11 @@ async function renderArticle(
     return;
   }
   const story = JSON.parse(await readFile(item.jsonPath, "utf8"));
-  html(response, renderArticleHtml(story, item));
+  const [completedUsers, submittedBy] = await Promise.all([
+    store.completedUsers(slug),
+    store.firstSuccessfulSubmitter(slug),
+  ]);
+  html(response, renderArticleHtml(story, item, { user, completedUsers, submittedBy }));
 }
 
 async function streamAudio(

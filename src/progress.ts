@@ -10,7 +10,7 @@ export interface PlaybackProgress {
   updatedAt: string;
 }
 
-interface PlaybackProgressStore {
+export interface PlaybackProgressStore {
   version: 1;
   updatedAt: string;
   users: Record<string, Record<string, PlaybackProgress>>;
@@ -76,6 +76,12 @@ async function readPlaybackProgressStore(libraryDir: string): Promise<PlaybackPr
     );
     return emptyPlaybackProgressStore();
   }
+}
+
+export async function readLegacyDefaultProgress(
+  libraryDir: string,
+): Promise<Record<string, PlaybackProgress>> {
+  return (await readPlaybackProgressStore(libraryDir)).users[DEFAULT_USER_ID] ?? {};
 }
 
 async function enqueueWrite(libraryDir: string, write: () => Promise<void>): Promise<void> {

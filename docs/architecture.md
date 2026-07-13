@@ -19,7 +19,7 @@ pasted article URLs, and custom pasted text.
    selected TTS provider, and optionally write word-timing alignment JSON.
 7. Write story JSON, text, MP3, cached image, and a library manifest.
 8. Send a ready notification with a direct link to the generated article page.
-9. Serve a Tailnet-only reader UI with a library view, article detail pages,
+9. Authenticate through Authentik OIDC and serve a Tailnet-only reader UI with a library view, article detail pages,
    a recent-article queue, cached images, inline MP3 streaming, and saved
    playback position.
 
@@ -37,6 +37,8 @@ login-required notification that opens the Tailnet-only reauth browser.
 
 - `src/feed.ts`: source-aware RSS fetch and parsing.
 - `src/server.ts`: service loop, HTTP reader routes, and action simulation.
+- `src/auth.ts`: OIDC state/nonce/PKCE, opaque sessions, cookies, and group checks.
+- `src/database.ts`: numbered Postgres migrations and app-owned user state.
 - `src/backlog.ts`: RSS queue status and async conversion queue helpers.
 - `src/notifications.ts`: stable mobile action IDs.
 - `src/haActions.ts`: Home Assistant WebSocket listener.
@@ -45,7 +47,7 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/alignment.ts`: optional OpenAI Whisper word-timing artifact writer.
 - `src/tts/`: provider interface and OpenAI implementation.
 - `src/library.ts`: durable manifest writer.
-- `src/progress.ts`: single-user durable playback-position store.
+- `src/progress.ts`: legacy JSON reader used only for cutover and rollback.
 - `src/reader.ts`: library and article-page renderer with server-backed
   playback-position sync, plus the RSS queue page.
 
@@ -68,14 +70,22 @@ validates the title/body, writes a generated story JSON/text file, synthesizes
 audio, appends the item to the library manifest, and sends the normal ready or
 failure notification. Custom text does not require Pirate Wires login.
 
-## Playback Progress
+## Identity and application data
 
-The reader stores playback position in `<library>/progress.json` through
-`GET /progress/<slug>` and `PUT /progress/<slug>`. The file is currently
-single-user under a `default` profile so progress follows the user across
-browsers and devices. The shape leaves room to replace `default` with an SSO
-user ID later. Browser `localStorage` remains a fallback if the server request
-fails.
+Authentik proves identity; Pirate Radio keys users by immutable OIDC
+`(issuer, subject)` and refreshes username, display name, email, and group
+snapshots on login. Authentik groups grant coarse member/admin access. Internal
+application user ids own progress and submissions, so email or username changes
+cannot move rows. The user snapshot remains after an IdP account disappears so
+historical attribution remains readable.
+
+Postgres owns users, hashed sessions, one-time OIDC transactions, per-user
+progress/completion, submissions, and migration receipts. One shared filesystem
+library still owns MP3, story JSON/text, images, alignment, `index.json`, and
+RSS `state.json`. `progress.json` is retained only as migration/rollback input.
+
+The browser may fall back to user-keyed `localStorage` if a progress read fails,
+but normal cross-device state is `GET/PUT /progress/<slug>` in Postgres.
 
 ## Alignment Prototype
 

@@ -11,7 +11,8 @@ runtime configuration in `homelab-config`.
 - Do not put homelab runtime Compose files, real Home Assistant URLs/tokens,
   OpenAI keys, or notification tokens in this public repo.
 - Preserve the existing CLI commands: `login`, `extract`, `speak`, `read`,
-  `poll`, `serve`, and `simulate`.
+  `poll`, `serve`, and `simulate`. The additive `migrate-progress` and
+  `export-progress` commands own the legacy progress cutover and rollback.
 
 ## Verification
 
@@ -34,4 +35,14 @@ registration separately.
   events directly over WebSocket.
 - Generated audio listings come from the library manifest, not by reading MP3
   files into memory.
+- Never authorize with usernames, emails, forwarded identity headers, or
+  submission snapshots. Application identity is `(issuer, subject)`, coarse
+  access comes from Authentik group snapshots, and row ownership uses the
+  internal application-user id.
+- `/health`, `/auth/login`, and `/auth/callback` are the only unauthenticated
+  routes. Keep MP3 ranges, images, alignment, manifests, docs, and article text
+  behind the same opaque application session.
+- Durable user/session/progress/submission state belongs in Postgres. MP3,
+  story, image, alignment, library-manifest, and RSS operational state remain
+  filesystem-owned and must use atomic replacement for JSON writes.
 - Set `PWR_HEADLESS=true` for Docker or other headless hosts.

@@ -1,6 +1,6 @@
 # Pirate Wires Reader
 
-Local CLI and Tailnet reader for extracting logged-in Pirate Wires stories,
+OIDC-protected homelab reader and local CLI for extracting Pirate Wires stories,
 queueing pasted text, generating OpenAI text-to-speech audio, and reading
 generated audio with cached article art where available.
 
@@ -90,6 +90,13 @@ homelab-functions, listens for the mobile action event over Home Assistant
 WebSocket, and writes the reader library under `PIRATE_RADIO_LIBRARY_DIR`. Set
 `PWR_HEADLESS=true` for Docker or any headless host.
 
+Service mode requires Postgres and an OpenID Connect provider. Pirate Radio
+uses authorization code plus PKCE, creates a host-only opaque session, requires
+the `pirate-radio-users` group for every reader route, and requires
+`pirate-radio-admins` for `/admin` and `/simulate/*`. See
+[configuration](docs/configuration.md), [security](docs/security.md), and the
+[HTTP contract](docs/api.md).
+
 When an article is approved, the service now fails closed if the Playwright
 profile is not logged into Pirate Wires, sends a failure notification with the
 active profile path, and leaves the article pending so it can be retried. After
@@ -116,7 +123,10 @@ The reader serves:
   search, pagination, async conversion buttons, pasted article URLs, and custom
   text entry.
 - `/article/<slug>` for a dedicated article page with audio and full text.
-- `/progress/<slug>` for cross-device playback position.
+- `/progress/<slug>` for private per-user cross-device playback and durable
+  completion at 95% or the browser `ended` event.
+- `/submissions.json` for authenticated global conversion history and
+  attribution.
 - `/audio/<slug>.mp3`, `/images/<slug>.<ext>`, and optional
   `/alignment/<slug>.json` assets.
 
@@ -138,3 +148,22 @@ item with:
 ```bash
 curl -X POST "http://127.0.0.1:8123/simulate/refresh/<slug>?regenerateAudio=true&notify=true"
 ```
+
+The maintenance endpoint requires an admin application session and a matching
+`Origin`; the loopback example is illustrative for an authenticated local test,
+not a bypass around OIDC.
+
+## Legacy progress cutover and rollback
+
+After Joe's normal Authentik account has logged in once, obtain its internal id
+from `/auth/me` and run:
+
+```bash
+npm run cli -- migrate-progress --user-id <application-user-id> --expect-count 12
+npm run cli -- export-progress --user-id <application-user-id>
+```
+
+The import is transactional and idempotent, retains a timestamped copy of the
+source `progress.json`, and refuses a count other than the expected value. The
+export creates parsed, rollback-compatible legacy JSON without overwriting the
+active source file.

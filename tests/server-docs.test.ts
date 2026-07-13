@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { afterEach, describe, expect, test } from "vitest";
 import { createPirateRadioRequestHandler } from "../src/server.js";
 import type { PirateRadioConfig } from "../src/config.js";
+import { FakeAuthenticator, MemoryStore } from "./support/fakes.js";
 
 const baseConfig: PirateRadioConfig = {
   port: 0,
@@ -14,6 +15,10 @@ const baseConfig: PirateRadioConfig = {
   feedUrl: "https://piratewires.substack.com/feed.xml",
   feeds: [{ id: "pirate-wires", name: "Pirate Wires", type: "pirate-wires", url: "https://piratewires.substack.com/feed.xml" }],
   enableAlignment: false,
+  oidcScopes: "openid profile email groups",
+  memberGroup: "pirate-radio-users",
+  adminGroup: "pirate-radio-admins",
+  sessionLifetimeHours: 24,
 };
 
 const servers: Array<ReturnType<typeof createServer>> = [];
@@ -36,7 +41,7 @@ afterEach(async () => {
 });
 
 async function startServer() {
-  const handler = createPirateRadioRequestHandler({ config: baseConfig });
+  const handler = createPirateRadioRequestHandler({ config: baseConfig, store: new MemoryStore(), authenticator: new FakeAuthenticator() });
   const server = createServer((request, response) => {
     void handler(request, response);
   });
@@ -94,7 +99,7 @@ describe("service docs endpoints", () => {
 
     const response = await fetch(`${baseUrl}/backlog/convert-text`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", origin: baseConfig.publicBaseUrl },
       body: JSON.stringify({ title: "Large Article", text: "x".repeat(60001) }),
     });
 
