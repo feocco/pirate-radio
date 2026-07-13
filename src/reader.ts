@@ -14,12 +14,12 @@ const sharedCss = `
   * { box-sizing: border-box; }
   body { margin: 0; color: var(--ink); background: var(--paper); line-height: 1.35; }
   a { color: inherit; }
-  .topbar { display: grid; grid-template-columns: 1fr 1fr 1fr; border-bottom: 1px solid var(--line); background: #000; color: #fff; }
-  .topbar a { display: block; padding: 12px 18px; border-right: 1px solid #666; font-weight: 800; text-decoration: underline; }
-  .topbar a.active { background: var(--accent); color: #000; }
   .brandbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 28px; background: var(--accent); border-bottom: 1px solid var(--line); font-weight: 900; }
-  .brand { display: flex; align-items: center; gap: 16px; font-size: 24px; }
+  .brandlink { display: flex; align-items: center; gap: 16px; font-size: 24px; text-decoration: none; }
   .mark { font-size: 42px; letter-spacing: -2px; line-height: .8; }
+  .topbar { display: flex; border-bottom: 1px solid var(--line); background: #000; color: #fff; }
+  .navlink { display: block; min-width: 180px; padding: 12px 18px; border-right: 1px solid #666; font-weight: 900; text-decoration: none; }
+  .navlink.active { color: var(--accent); }
   .wrap { width: min(1180px, calc(100vw - 32px)); margin: 0 auto; }
   .hero { padding: 54px 0 30px; border-bottom: 1px solid #999; }
   .kicker { font-weight: 900; text-transform: uppercase; font-size: 13px; letter-spacing: .08em; color: var(--muted); margin-bottom: 10px; }
@@ -75,8 +75,9 @@ const sharedCss = `
   .admin-label { font-weight: 950; }
   .admin-value { font-weight: 800; color: #222; }
   @media (max-width: 760px) {
-    .topbar { grid-template-columns: 1fr; }
-    .topbar a { border-right: 0; border-bottom: 1px solid #666; }
+    .topbar { display: grid; grid-template-columns: 1fr 1fr; }
+    .navlink { min-width: 0; border-right: 0; }
+    .navlink + .navlink { border-left: 1px solid #666; }
     .brandbar { padding: 14px 16px; }
     .item { grid-template-columns: 1fr; }
     .url-queue, .text-queue { grid-template-columns: 1fr; }
@@ -601,18 +602,18 @@ export function renderAdminHtml(): string {
 type ActivePage = "library" | "backlog" | "admin";
 
 function renderChrome(activePage: ActivePage): string {
+  const brandClass = activePage === "library" ? "brandlink active" : "brandlink";
   const items = [
-    { page: "library", href: "/", label: "Pirate Wires" },
     { page: "backlog", href: "/backlog", label: "Backlog" },
     { page: "admin", href: "/admin", label: "Admin" },
   ] as const;
-  return `<nav class="topbar">${items
+  return `<div class="brandbar"><a class="${brandClass}" href="/" aria-label="Pirate Radio home"><span class="mark">PW</span><span>Pirate Radio</span></a><div>AI-generated audio</div></div>
+  <nav class="topbar" aria-label="Primary">${items
     .map(
       (item) =>
-        `<a class="${item.page === activePage ? "active" : ""}" href="${item.href}">${item.label}</a>`,
+        `<a class="navlink ${item.page === activePage ? "active" : ""}" href="${item.href}">${item.label}</a>`,
     )
-    .join("")}</nav>
-  <div class="brandbar"><div class="brand"><span class="mark">PW</span><span>Pirate Radio</span></div><div>AI-generated audio</div></div>`;
+    .join("")}</nav>`;
 }
 
 function renderBlock(block: StoryContentBlock): string {

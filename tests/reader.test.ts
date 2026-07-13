@@ -23,10 +23,11 @@ describe("reader page", () => {
     expect(html).toContain("downloadLink.download = item.slug + \".mp3\"");
     expect(html).toContain("Read");
     expect(html).toContain("Download MP3");
-    expect(html).toContain("Pirate Wires");
+    expect(html).toContain("Pirate Radio");
     expect(html).toContain('href="/backlog"');
     expect(html).toContain('href="/admin"');
-    expect(html).toContain('<a class="active" href="/">Pirate Wires</a>');
+    expect(html).toContain('<a class="brandlink active" href="/" aria-label="Pirate Radio home">');
+    expect(html).not.toContain('href="/">Pirate Wires</a>');
     expect(html).not.toContain("Culture");
   });
 
@@ -49,7 +50,8 @@ describe("reader page", () => {
     expect(html).toContain("Convert");
     expect(html).toContain("pageSize = 10");
     expect(html).not.toContain('placeholder.textContent = "PW"');
-    expect(html).toContain('<a class="active" href="/backlog">Backlog</a>');
+    expect(html).toContain('<a class="navlink active" href="/backlog">Backlog</a>');
+    expect(html).toContain('<a class="brandlink" href="/" aria-label="Pirate Radio home">');
   });
 
   test("renders an admin page with the admin nav tab active", () => {
@@ -59,7 +61,7 @@ describe("reader page", () => {
     expect(html).toContain("/health");
     expect(html).toContain("/library.json");
     expect(html).toContain("/backlog.json");
-    expect(html).toContain('<a class="active" href="/admin">Admin</a>');
+    expect(html).toContain('<a class="navlink active" href="/admin">Admin</a>');
     expect(html).not.toContain("Culture");
   });
 
