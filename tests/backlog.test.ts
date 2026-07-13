@@ -4,7 +4,7 @@ import {
   findBacklogArticle,
   queueBacklogConversion,
   queueBacklogUrlConversion,
-  validatePirateWiresArticleUrl,
+  validateArticleUrl,
 } from "../src/backlog.js";
 import type { PirateArticle } from "../src/feed.js";
 import type { LibraryManifest } from "../src/library.js";
@@ -19,6 +19,8 @@ const articles: PirateArticle[] = [
     publishedAt: "Fri, 26 Jun 2026 13:04:07 GMT",
     description: "Already converted.",
     slug: "converted-story",
+    sourceType: "pirate-wires",
+    sourceName: "Pirate Wires",
   },
   {
     id: "https://piratewires.substack.com/p/unconverted-story",
@@ -28,6 +30,8 @@ const articles: PirateArticle[] = [
     publishedAt: "Thu, 25 Jun 2026 13:04:07 GMT",
     description: "Needs audio.",
     slug: "unconverted-story",
+    sourceType: "pirate-wires",
+    sourceName: "Pirate Wires",
   },
   {
     id: "https://piratewires.substack.com/p/friday-three-morning-takes-84a",
@@ -37,6 +41,8 @@ const articles: PirateArticle[] = [
     publishedAt: "Mon, 22 Jun 2026 09:45:52 GMT",
     description: "Short takes.",
     slug: "friday-three-morning-takes-84a",
+    sourceType: "pirate-wires",
+    sourceName: "Pirate Wires",
   },
 ];
 
@@ -76,6 +82,7 @@ describe("backlog", () => {
         title: "Converted Story",
         converted: true,
         processing: false,
+        sourceName: "Pirate Wires",
       }),
       expect.objectContaining({
         slug: "unconverted-story",
@@ -190,23 +197,43 @@ describe("backlog", () => {
     expect(result).toEqual({ ok: false, status: "missing" });
   });
 
-  test("validates pasted Pirate Wires article URLs", () => {
-    expect(validatePirateWiresArticleUrl("https://www.piratewires.com/p/test-story")).toEqual({
+  test("validates known pasted article URLs", async () => {
+    await expect(validateArticleUrl("https://www.piratewires.com/p/test-story")).resolves.toEqual({
       ok: true,
       url: "https://www.piratewires.com/p/test-story",
       slug: "test-story",
+      sourceType: "pirate-wires",
+      sourceName: "Pirate Wires",
     });
-    expect(validatePirateWiresArticleUrl("not a url")).toEqual({
+    await expect(validateArticleUrl("https://www.hyperdimensional.co/p/what-should-be-done")).resolves.toEqual({
+      ok: true,
+      url: "https://www.hyperdimensional.co/p/what-should-be-done",
+      slug: "what-should-be-done",
+      sourceType: "substack",
+      sourceName: "Hyperdimensional",
+    });
+    await expect(
+      validateArticleUrl("https://open.substack.com/pub/hyperdimensional/p/what-should-be-done", {
+        resolveUrl: async () => "https://www.hyperdimensional.co/p/what-should-be-done?utm_source=share",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      url: "https://www.hyperdimensional.co/p/what-should-be-done",
+      slug: "what-should-be-done",
+      sourceType: "substack",
+      sourceName: "Hyperdimensional",
+    });
+    await expect(validateArticleUrl("not a url")).resolves.toEqual({
       ok: false,
       error: "Enter a valid URL.",
     });
-    expect(validatePirateWiresArticleUrl("https://example.com/p/test-story")).toEqual({
+    await expect(validateArticleUrl("https://example.com/p/test-story")).resolves.toEqual({
       ok: false,
-      error: "Enter a Pirate Wires URL from piratewires.com.",
+      error: "Enter a supported article URL from Pirate Wires or Substack.",
     });
-    expect(validatePirateWiresArticleUrl("https://www.piratewires.com/about")).toEqual({
+    await expect(validateArticleUrl("https://www.piratewires.com/about")).resolves.toEqual({
       ok: false,
-      error: "Enter a Pirate Wires article URL like https://www.piratewires.com/p/story-slug.",
+      error: "Enter an article URL with a /p/story-slug path.",
     });
   });
 
@@ -231,12 +258,41 @@ describe("backlog", () => {
       id: "https://www.piratewires.com/p/direct-story",
       url: "https://www.piratewires.com/p/direct-story",
       slug: "direct-story",
+      sourceType: "pirate-wires",
+      sourceName: "Pirate Wires",
     });
     expect(writeState).toHaveBeenCalledTimes(1);
     expect(startConversion).toHaveBeenCalledWith("direct-story");
   });
 
-  test("queueing a pasted non-Pirate-Wires URL reports a validation error", async () => {
+  test("queueing a pasted Substack URL records pending source metadata", async () => {
+    const state = createInitialState();
+    const processingSlugs = new Set<string>();
+    const writeState = vi.fn(async () => {});
+    const startConversion = vi.fn(async () => {});
+
+    const result = await queueBacklogUrlConversion({
+      url: "https://www.hyperdimensional.co/p/what-should-be-done",
+      manifest,
+      state,
+      statePath: "/tmp/state.json",
+      processingSlugs,
+      writeState,
+      startConversion,
+    });
+
+    expect(result).toEqual({ ok: true, status: "queued", slug: "what-should-be-done" });
+    expect(state.pending["what-should-be-done"]).toMatchObject({
+      id: "https://www.hyperdimensional.co/p/what-should-be-done",
+      url: "https://www.hyperdimensional.co/p/what-should-be-done",
+      slug: "what-should-be-done",
+      sourceType: "substack",
+      sourceName: "Hyperdimensional",
+      description: "Queued from pasted Hyperdimensional URL.",
+    });
+  });
+
+  test("queueing an unsupported URL reports a validation error", async () => {
     const result = await queueBacklogUrlConversion({
       url: "https://example.com/p/direct-story",
       manifest,
@@ -250,7 +306,7 @@ describe("backlog", () => {
     expect(result).toEqual({
       ok: false,
       status: "invalid_url",
-      error: "Enter a Pirate Wires URL from piratewires.com.",
+      error: "Enter a supported article URL from Pirate Wires or Substack.",
     });
   });
 });

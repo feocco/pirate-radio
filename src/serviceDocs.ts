@@ -4,13 +4,13 @@ const pirateRadioOpenApi = {
     title: "Pirate Radio API",
     version: "0.1.0",
     description:
-      "Browser pages and JSON endpoints exposed by the Pirate Radio service for library playback, backlog conversion, and health checks.",
+      "Browser pages and JSON endpoints exposed by the Pirate Radio service for library playback, queue conversion, and health checks.",
   },
   servers: [{ url: "/" }],
   tags: [
     { name: "service", description: "Operational and discovery endpoints." },
     { name: "library", description: "Library pages, media, and playback state." },
-    { name: "backlog", description: "Recent-feed backlog views and conversion actions." },
+    { name: "queue", description: "Recent-feed queue views and conversion actions." },
   ],
   paths: {
     "/health": {
@@ -254,22 +254,22 @@ const pirateRadioOpenApi = {
         },
       },
     },
-    "/backlog": {
+    "/queue": {
       get: {
-        tags: ["backlog"],
-        summary: "Backlog browser page",
+        tags: ["queue"],
+        summary: "Queue browser page",
         responses: {
           "200": {
-            description: "HTML backlog page for recent feed items.",
+            description: "HTML queue page for recent feed items.",
             content: { "text/html": { schema: { type: "string" } } },
           },
         },
       },
     },
-    "/backlog.json": {
+    "/queue.json": {
       get: {
-        tags: ["backlog"],
-        summary: "Backlog feed snapshot",
+        tags: ["queue"],
+        summary: "Queue feed snapshot",
         responses: {
           "200": {
             description: "Recent RSS items annotated with conversion status.",
@@ -293,9 +293,9 @@ const pirateRadioOpenApi = {
         },
       },
     },
-    "/backlog/convert/{slug}": {
+    "/queue/convert/{slug}": {
       post: {
-        tags: ["backlog"],
+        tags: ["queue"],
         summary: "Queue conversion for a recent feed item",
         parameters: [
           {
@@ -322,7 +322,7 @@ const pirateRadioOpenApi = {
             },
           },
           "404": {
-            description: "The slug does not map to a backlog article.",
+            description: "The slug does not map to a queue article.",
             content: {
               "application/json": {
                 schema: {
@@ -339,10 +339,10 @@ const pirateRadioOpenApi = {
         },
       },
     },
-    "/backlog/convert-url": {
+    "/queue/convert-url": {
       post: {
-        tags: ["backlog"],
-        summary: "Queue conversion for a pasted Pirate Wires URL",
+        tags: ["queue"],
+        summary: "Queue conversion for a pasted article URL",
         requestBody: {
           required: true,
           content: {
@@ -375,7 +375,7 @@ const pirateRadioOpenApi = {
             },
           },
           "400": {
-            description: "The pasted URL is invalid or not a Pirate Wires article URL.",
+            description: "The pasted URL is invalid or not a supported article URL.",
             content: {
               "application/json": {
                 schema: {
@@ -393,9 +393,9 @@ const pirateRadioOpenApi = {
         },
       },
     },
-    "/backlog/convert-text": {
+    "/queue/convert-text": {
       post: {
-        tags: ["backlog"],
+        tags: ["queue"],
         summary: "Queue conversion for pasted custom text",
         requestBody: {
           required: true,
@@ -558,10 +558,11 @@ const endpointDocs: EndpointDoc[] = [
   { method: "GET", path: "/article/{slug}", description: "Dedicated article page with audio and story text." },
   { method: "GET", path: "/progress/{slug}", description: "Read saved playback position for one article." },
   { method: "PUT", path: "/progress/{slug}", description: "Persist playback position for one article." },
-  { method: "GET", path: "/backlog", description: "Backlog browser for recent RSS articles." },
-  { method: "GET", path: "/backlog.json", description: "Recent RSS items annotated with conversion status." },
-  { method: "POST", path: "/backlog/convert/{slug}", description: "Queue conversion for a feed-backed backlog article." },
-  { method: "POST", path: "/backlog/convert-url", description: "Queue conversion for a pasted Pirate Wires article URL." },
+  { method: "GET", path: "/queue", description: "Queue browser for recent RSS articles." },
+  { method: "GET", path: "/queue.json", description: "Recent RSS items annotated with conversion status." },
+  { method: "POST", path: "/queue/convert/{slug}", description: "Queue conversion for a feed-backed queue article." },
+  { method: "POST", path: "/queue/convert-url", description: "Queue conversion for a pasted article URL." },
+  { method: "POST", path: "/queue/convert-text", description: "Queue conversion for pasted custom text." },
   { method: "GET, HEAD", path: "/audio/{filename}", description: "Serve generated MP3 audio with range support." },
   { method: "GET", path: "/images/{filename}", description: "Serve cached article art from the local library." },
   { method: "GET", path: "/alignment/{filename}", description: "Serve optional word-alignment JSON when available." },
@@ -652,7 +653,7 @@ export function renderPirateRadioDocsHtml(): string {
     <main>
       <h1>Pirate Radio API Docs</h1>
       <p class="lede">
-        Pirate Radio exposes a small browser-first HTTP surface for the audio library, recent backlog queue,
+        Pirate Radio exposes a small browser-first HTTP surface for the audio library, recent queue,
         playback progress, and service health. The machine-readable contract lives at
         <a href="/openapi.json">/openapi.json</a>.
       </p>

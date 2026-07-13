@@ -7,11 +7,15 @@ const BLOCKED_TEXT_PATTERNS = [
   /sign in/i,
   /log in/i,
   /share this/i,
+  /type your email/i,
+  /reader-supported publication/i,
+  /^comments?$/i,
 ];
 
 export function extractStoryFromHtml(html: string, sourceUrl: string): Story {
   const article = extractBodyContainerHtml(html);
   const title =
+    cleanText(metaContent(html, "property", "og:title") ?? "") ||
     cleanText(firstMatch(html, /<h1\b[^>]*>([\s\S]*?)<\/h1>/i) ?? "") ||
     cleanText(firstMatch(html, /<title\b[^>]*>([\s\S]*?)<\/title>/i) ?? "");
 
@@ -25,10 +29,12 @@ export function extractStoryFromHtml(html: string, sourceUrl: string): Story {
     .replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gi, "")
     .replace(/<footer\b[^>]*>[\s\S]*?<\/footer>/gi, "")
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "");
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+\bdata-component-name=["']SubscribeWidget["'][\s\S]*?<\/div>/gi, "")
+    .replace(/<[^>]+\bclass=["'][^"']*(?:comments|subscribe-widget|subscription-widget)[^"']*["'][\s\S]*?<\/div>/gi, "");
 
   const contentBlocks = Array.from(
-    bodyHtml.matchAll(/<(p|h2|h3|li|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/gi),
+    bodyHtml.matchAll(/<(p|h2|h3|h4|li|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/gi),
     (match): StoryContentBlock | undefined => {
       const text = cleanText(match[2] ?? "");
       if (!text || isBlockedText(text)) {
@@ -64,6 +70,9 @@ export function extractStoryFromHtml(html: string, sourceUrl: string): Story {
 function blockType(tagName: string): StoryContentBlockType {
   const tag = tagName.toLowerCase();
   if (tag === "h2" || tag === "h3") {
+    return "heading";
+  }
+  if (tag === "h4") {
     return "heading";
   }
   if (tag === "li") {
@@ -142,6 +151,8 @@ function extractBodyContainerHtml(html: string): string {
       html,
       /<section\b(?=[^>]*class=["'][^"']*article_postBody[^"']*["'])[^>]*>([\s\S]*?)<\/section>/i,
     ) ??
+    htmlFromClassSlice(html, "available-content") ??
+    htmlFromClassSlice(html, "body markup") ??
     firstMatch(
       html,
       /<div\b(?=[^>]*class=["'][^"']*richText[^"']*["'])[^>]*>([\s\S]*?)<\/div>/i,
@@ -155,12 +166,38 @@ function firstMatch(value: string, pattern: RegExp): string | undefined {
   return value.match(pattern)?.[1];
 }
 
+function htmlFromClassSlice(html: string, className: string): string | undefined {
+  const classMatcher = new RegExp(`<[^>]+\\bclass=["'][^"']*${escapeRegExp(className)}[^"']*["'][^>]*>`, "i");
+  const match = classMatcher.exec(html);
+  if (!match) {
+    return undefined;
+  }
+  const stopPatterns = [
+    /<div\b[^>]*class=["'][^"']*comments[^"']*["']/i,
+    /<section\b[^>]*class=["'][^"']*comments[^"']*["']/i,
+    /<\/article>/i,
+    /<\/body>/i,
+  ];
+  const rest = html.slice(match.index);
+  const stop = stopPatterns
+    .map((pattern) => pattern.exec(rest)?.index)
+    .filter((index): index is number => typeof index === "number" && index > 0)
+    .sort((left, right) => left - right)[0];
+  return stop ? rest.slice(0, stop) : rest;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function stripTags(value: string): string {
   return value.replace(/<[^>]+>/g, " ");
 }
 
 function decodeHtml(value: string): string {
   return value
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0">
+  <channel>
+    <title><![CDATA[Hyperdimensional]]></title>
+    <description><![CDATA[A newsletter about emerging technology and the future of governance.]]></description>
+    <link>https://www.hyperdimensional.co</link>
+    <item>
+      <title><![CDATA[What Should Be Done]]></title>
+      <description><![CDATA[How to get past improvised model licensing]]></description>
+      <link>https://www.hyperdimensional.co/p/what-should-be-done</link>
+      <guid isPermaLink="false">https://www.hyperdimensional.co/p/what-should-be-done</guid>
+      <dc:creator><![CDATA[Dean W. Ball]]></dc:creator>
+      <pubDate>Fri, 26 Jun 2026 11:45:17 GMT</pubDate>
+      <enclosure url="https://substackcdn.com/image/fetch/hero.png" length="0" type="image/jpeg" />
+      <content:encoded><![CDATA[
+        <p class="button-wrapper"><a class="button primary" href="https://www.hyperdimensional.co/subscribe?"><span>Subscribe now</span></a></p>
+        <p>Nothing below is an official or unofficial view of OpenAI.</p>
+        <h4>On the Current State of Affairs</h4>
+        <p>First real body paragraph with a frontier model discussion.</p>
+      ]]></content:encoded>
+    </item>
+  </channel>
+</rss>

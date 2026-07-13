@@ -5,7 +5,7 @@ import { basename, join, resolve } from "node:path";
 import { contentTypeForAsset } from "./assets.js";
 import { buildBacklogItems, queueBacklogConversion, queueBacklogUrlConversion } from "./backlog.js";
 import { filterVoiceExcludedLibraryManifest } from "./articleFilters.js";
-import { fetchPirateFeed, detectNewArticles } from "./feed.js";
+import { fetchArticleFeeds, detectNewArticles } from "./feed.js";
 import { extractStoryFromUrl } from "./browser.js";
 import type { PirateRadioConfig } from "./config.js";
 import { HomeAssistantActionListener } from "./haActions.js";
@@ -97,7 +97,7 @@ export class PirateRadioService {
 
   async pollOnce(): Promise<void> {
     const state = await this.getState();
-    const articles = await fetchPirateFeed(this.options.config.feedUrl);
+    const articles = await fetchArticleFeeds(this.options.config.feeds);
     const unseen = detectNewArticles(articles, seenArticleIds(state));
     const toNotify = unseen.slice(0, this.options.config.maxNotificationsPerPoll);
 
@@ -207,7 +207,7 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       html(response, renderReaderHtml());
       return;
     }
-    if (request.method === "GET" && url.pathname === "/backlog") {
+    if (request.method === "GET" && (url.pathname === "/queue" || url.pathname === "/backlog")) {
       html(response, renderBacklogHtml());
       return;
     }
@@ -215,8 +215,8 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       html(response, renderAdminHtml());
       return;
     }
-    if (request.method === "GET" && url.pathname === "/backlog.json") {
-      const articles = await fetchPirateFeed(options.config.feedUrl);
+    if (request.method === "GET" && (url.pathname === "/queue.json" || url.pathname === "/backlog.json")) {
+      const articles = await fetchArticleFeeds(options.config.feeds);
       const manifest = await readLibraryManifest(options.config.libraryDir);
       json(response, 200, {
         version: 1,
@@ -229,9 +229,9 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       });
       return;
     }
-    if (request.method === "POST" && url.pathname.startsWith("/backlog/convert/")) {
-      const slug = decodeURIComponent(url.pathname.slice("/backlog/convert/".length));
-      const articles = await fetchPirateFeed(options.config.feedUrl);
+    if (request.method === "POST" && queueConvertSlug(url.pathname)) {
+      const slug = decodeURIComponent(queueConvertSlug(url.pathname) ?? "");
+      const articles = await fetchArticleFeeds(options.config.feeds);
       const manifest = await readLibraryManifest(options.config.libraryDir);
       const state = await getState();
       const result = await queueBacklogConversion({
@@ -247,7 +247,10 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       json(response, result.status === "missing" ? 404 : 200, result);
       return;
     }
-    if (request.method === "POST" && url.pathname === "/backlog/convert-url") {
+    if (
+      request.method === "POST" &&
+      (url.pathname === "/queue/convert-url" || url.pathname === "/backlog/convert-url")
+    ) {
       try {
         const body = await readJsonBody(request);
         const manifest = await readLibraryManifest(options.config.libraryDir);
@@ -271,7 +274,10 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       }
       return;
     }
-    if (request.method === "POST" && url.pathname === "/backlog/convert-text") {
+    if (
+      request.method === "POST" &&
+      (url.pathname === "/queue/convert-text" || url.pathname === "/backlog/convert-text")
+    ) {
       try {
         const body = await readJsonBody(request);
         const validation = validateCustomTextInput({
@@ -432,6 +438,16 @@ function findArticleBySlug(state: PirateRadioState, slug: string) {
     ...Object.values(state.skipped).map((record) => record.article),
   ];
   return articles.find((article) => (article.slug ?? basename(new URL(article.url).pathname)) === slug);
+}
+
+function queueConvertSlug(pathname: string): string | undefined {
+  if (pathname.startsWith("/queue/convert/")) {
+    return pathname.slice("/queue/convert/".length);
+  }
+  if (pathname.startsWith("/backlog/convert/")) {
+    return pathname.slice("/backlog/convert/".length);
+  }
+  return undefined;
 }
 
 async function renderArticle(

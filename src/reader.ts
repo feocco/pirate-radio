@@ -49,13 +49,13 @@ const sharedCss = `
   .textarea { min-height: 180px; resize: vertical; padding: 11px 12px; border: 2px solid var(--line); background: #fff; font: inherit; font-weight: 700; }
   .status { grid-column: 1 / -1; min-height: 20px; color: var(--muted); font-weight: 900; }
   .status.error { color: #9d1111; }
-  .backlog-summary { color: var(--muted); font-weight: 900; }
-  .backlog-list { display: grid; gap: 0; margin: 22px auto 42px; border-top: 2px solid var(--line); }
-  .backlog-row { display: grid; grid-template-columns: 1fr auto; gap: 18px; padding: 15px 0; border-bottom: 1px solid #777; align-items: center; }
-  .backlog-row h2 { font-size: clamp(22px, 3vw, 34px); font-weight: 950; line-height: 1.02; }
-  .backlog-row .meta { margin: 5px 0 0; }
-  .backlog-row .tagline { margin: 7px 0 0; font-size: 16px; max-width: 860px; color: #222; }
-  .backlog-row .actions { justify-content: flex-end; margin-top: 0; min-width: 190px; }
+  .queue-summary { color: var(--muted); font-weight: 900; }
+  .queue-list { display: grid; gap: 0; margin: 22px auto 42px; border-top: 2px solid var(--line); }
+  .queue-row { display: grid; grid-template-columns: 1fr auto; gap: 18px; padding: 15px 0; border-bottom: 1px solid #777; align-items: center; }
+  .queue-row h2 { font-size: clamp(22px, 3vw, 34px); font-weight: 950; line-height: 1.02; }
+  .queue-row .meta { margin: 5px 0 0; }
+  .queue-row .tagline { margin: 7px 0 0; font-size: 16px; max-width: 860px; color: #222; }
+  .queue-row .actions { justify-content: flex-end; margin-top: 0; min-width: 190px; }
   .article-shell { width: min(1040px, calc(100vw - 32px)); margin: 0 auto; padding-bottom: 70px; }
   .article-hero { padding: 62px 0 26px; text-align: center; }
   .article-hero h1 { margin: 0 auto; }
@@ -81,8 +81,8 @@ const sharedCss = `
     .brandbar { padding: 14px 16px; }
     .item { grid-template-columns: 1fr; }
     .url-queue, .text-queue { grid-template-columns: 1fr; }
-    .backlog-row { grid-template-columns: 1fr; }
-    .backlog-row .actions { justify-content: flex-start; min-width: 0; }
+    .queue-row { grid-template-columns: 1fr; }
+    .queue-row .actions { justify-content: flex-start; min-width: 0; }
     .article-meta, .admin-row { display: block; }
     .article-meta div + div { margin-top: 8px; }
   }
@@ -190,7 +190,7 @@ export function renderReaderHtml(): string {
         heading.textContent = item.title;
         const meta = document.createElement("div");
         meta.className = "meta";
-        meta.textContent = [item.publishedAt, item.wordCount ? item.wordCount + " words" : ""].filter(Boolean).join(" - ");
+        meta.textContent = [item.sourceName, item.publishedAt, item.wordCount ? item.wordCount + " words" : ""].filter(Boolean).join(" - ");
         const tagline = document.createElement("p");
         tagline.className = "tagline";
         tagline.textContent = text(item.tagline);
@@ -237,18 +237,18 @@ export function renderBacklogHtml(): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Backlog - Pirate Radio</title>
+  <title>Queue - Pirate Radio</title>
   <style>${sharedCss}</style>
 </head>
 <body>
   ${renderChrome("backlog")}
   <section class="hero wrap">
-    <div class="kicker">Recent RSS</div>
-    <h1>Backlog</h1>
-    <p class="deck">Recent Pirate Wires articles that can be queued for audio generation.</p>
+    <div class="kicker">Audio queue</div>
+    <h1>Queue</h1>
+    <p class="deck">Recent monitored articles, pasted URLs, and custom text that can be queued for audio generation.</p>
   </section>
   <form id="url-queue" class="url-queue wrap">
-    <input id="article-url" class="search" type="url" placeholder="Paste Pirate Wires article URL" aria-label="Paste Pirate Wires article URL">
+    <input id="article-url" class="search" type="url" placeholder="Paste article URL" aria-label="Paste article URL">
     <button id="queue-url" class="button" type="submit">Convert URL</button>
     <div id="url-status" class="status" role="status"></div>
   </form>
@@ -259,19 +259,19 @@ export function renderBacklogHtml(): string {
     <div id="text-status" class="status" role="status"></div>
   </form>
   <section class="toolbar wrap">
-    <input id="search" class="search" type="search" placeholder="Search title, author, or description" aria-label="Search backlog">
+    <input id="search" class="search" type="search" placeholder="Search title, author, source, or description" aria-label="Search queue">
     <label class="toggle"><input id="show-all" type="checkbox"> All recent</label>
-    <div id="summary" class="backlog-summary"></div>
+    <div id="summary" class="queue-summary"></div>
   </section>
-  <main id="backlog" class="backlog-list wrap">Loading...</main>
-  <nav class="pager wrap" aria-label="Backlog pages">
+  <main id="queue" class="queue-list wrap">Loading...</main>
+  <nav class="pager wrap" aria-label="Queue pages">
     <button id="prev" class="button" type="button">Previous</button>
     <span id="page"></span>
     <button id="next" class="button" type="button">Next</button>
   </nav>
   <script>
     const pageSize = 10;
-    const root = document.getElementById("backlog");
+    const root = document.getElementById("queue");
     const search = document.getElementById("search");
     const showAll = document.getElementById("show-all");
     const summary = document.getElementById("summary");
@@ -299,7 +299,7 @@ export function renderBacklogHtml(): string {
       const query = normalize(search.value);
       return items
         .filter((item) => showAll.checked || !item.converted)
-        .filter((item) => !query || [item.title, item.author, item.description].some((value) => normalize(value).includes(query)));
+        .filter((item) => !query || [item.title, item.author, item.sourceName, item.description].some((value) => normalize(value).includes(query)));
     }
 
     function render() {
@@ -321,13 +321,13 @@ export function renderBacklogHtml(): string {
       }
       for (const item of pageItems) {
         const section = document.createElement("section");
-        section.className = "backlog-row";
+        section.className = "queue-row";
         const content = document.createElement("div");
         const heading = document.createElement("h2");
         heading.textContent = item.title;
         const meta = document.createElement("div");
         meta.className = "meta";
-        meta.textContent = [item.publishedAt, item.author].filter(Boolean).join(" - ");
+        meta.textContent = [item.sourceName, item.publishedAt, item.author].filter(Boolean).join(" - ");
         const description = document.createElement("p");
         description.className = "tagline";
         description.textContent = item.description || "";
@@ -360,8 +360,8 @@ export function renderBacklogHtml(): string {
     }
 
     async function loadBacklog() {
-      const response = await fetch("/backlog.json", { cache: "no-store" });
-      if (!response.ok) throw new Error("Could not load backlog");
+      const response = await fetch("/queue.json", { cache: "no-store" });
+      if (!response.ok) throw new Error("Could not load queue");
       const payload = await response.json();
       items = Array.isArray(payload.items) ? payload.items : [];
       render();
@@ -371,7 +371,7 @@ export function renderBacklogHtml(): string {
     async function convertItem(slug, button) {
       button.disabled = true;
       button.textContent = "Processing";
-      const response = await fetch("/backlog/convert/" + encodeURIComponent(slug), { method: "POST" });
+      const response = await fetch("/queue/convert/" + encodeURIComponent(slug), { method: "POST" });
       if (!response.ok) {
         button.disabled = false;
         button.textContent = "Convert";
@@ -390,14 +390,14 @@ export function renderBacklogHtml(): string {
       queueUrlButton.disabled = true;
       queueUrlButton.textContent = "Queueing";
       try {
-        const response = await fetch("/backlog/convert-url", {
+        const response = await fetch("/queue/convert-url", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ url: articleUrl.value }),
         });
         const payload = await response.json();
         if (!response.ok || !payload.ok) {
-          throw new Error(payload.error || "Could not queue Pirate Wires URL.");
+          throw new Error(payload.error || "Could not queue URL.");
         }
         if (payload.status === "converted") {
           urlStatus.textContent = "Already converted. Check the main reader.";
@@ -423,7 +423,7 @@ export function renderBacklogHtml(): string {
       queueTextButton.disabled = true;
       queueTextButton.textContent = "Queueing";
       try {
-        const response = await fetch("/backlog/convert-text", {
+        const response = await fetch("/queue/convert-text", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ title: customTitle.value, text: customText.value }),
@@ -481,7 +481,7 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
   ${renderChrome("library")}
   <article class="article-shell">
     <header class="article-hero">
-      <div class="kicker">Pirate Wires</div>
+      <div class="kicker">${escapeHtml(item.sourceName ?? "Pirate Radio")}</div>
       <h1>${escapeHtml(story.title)}</h1>
       ${story.tagline ? `<p class="deck">${escapeHtml(story.tagline)}</p>` : ""}
     </header>
@@ -584,8 +584,8 @@ export function renderAdminHtml(): string {
       <div><a class="readlink" href="/library.json">Open JSON</a></div>
     </section>
     <section class="admin-row">
-      <div class="admin-label">Backlog</div>
-      <div><a class="readlink" href="/backlog.json">Open JSON</a></div>
+      <div class="admin-label">Queue</div>
+      <div><a class="readlink" href="/queue.json">Open JSON</a></div>
     </section>
   </main>
   <script>
@@ -604,7 +604,7 @@ type ActivePage = "library" | "backlog" | "admin";
 function renderChrome(activePage: ActivePage): string {
   const brandClass = activePage === "library" ? "brandlink active" : "brandlink";
   const items = [
-    { page: "backlog", href: "/backlog", label: "Backlog" },
+    { page: "backlog", href: "/queue", label: "Queue" },
     { page: "admin", href: "/admin", label: "Admin" },
   ] as const;
   return `<div class="brandbar"><a class="${brandClass}" href="/" aria-label="Pirate Radio home"><span class="mark">PW</span><span>Pirate Radio</span></a><div>AI-generated audio</div></div>

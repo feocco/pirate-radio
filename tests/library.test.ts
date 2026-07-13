@@ -69,6 +69,9 @@ describe("library manifest", () => {
       slug: "inside-microns-attempts",
       title: "Inside Micron's Attempts",
       sourceUrl: "https://piratewires.substack.com/p/inside-microns-attempts",
+      sourceType: "pirate-wires",
+      sourceName: "Pirate Wires",
+      canonicalUrl: "https://www.piratewires.com/p/inside-microns-attempts",
       audioPath,
       jsonPath: join(tempDir, "stories", "inside-microns-attempts.json"),
       textPath: join(tempDir, "text", "inside-microns-attempts.txt"),
@@ -88,6 +91,9 @@ describe("library manifest", () => {
 
     expect(manifest.items).toHaveLength(1);
     expect(manifest.items[0].audioUrl).toBe("/audio/inside-microns-attempts.mp3");
+    expect(manifest.items[0].sourceType).toBe("pirate-wires");
+    expect(manifest.items[0].sourceName).toBe("Pirate Wires");
+    expect(manifest.items[0].canonicalUrl).toBe("https://www.piratewires.com/p/inside-microns-attempts");
     expect(manifest.items[0].imageUrl).toBe("/images/inside-microns-attempts.png");
     expect(manifest.items[0].tagline).toBe("following nonsense regulations");
     expect(manifest.items[0].sectionTitles).toEqual(["American Industrialization Redux"]);

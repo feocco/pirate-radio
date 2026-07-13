@@ -5,6 +5,9 @@ export interface LibraryItem {
   slug: string;
   title: string;
   sourceUrl: string;
+  sourceType?: string;
+  sourceName?: string;
+  canonicalUrl?: string;
   publishedAt: string;
   generatedAt: string;
   audioPath: string;

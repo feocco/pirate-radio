@@ -1,6 +1,6 @@
 import { filterVoiceExcludedArticles } from "./articleFilters.js";
 import { slugFromUrl } from "./slug.js";
-import type { PirateArticle } from "./feed.js";
+import type { ArticleSourceType, PirateArticle } from "./feed.js";
 import type { LibraryManifest } from "./library.js";
 import type { PirateRadioState } from "./state.js";
 
@@ -11,6 +11,9 @@ export interface BacklogItem {
   publishedAt: string;
   description: string;
   url: string;
+  sourceType?: ArticleSourceType;
+  sourceName?: string;
+  canonicalUrl?: string;
   converted: boolean;
   processing: boolean;
 }
@@ -50,9 +53,13 @@ export type QueueBacklogUrlConversionResult =
   | { ok: true; status: "converted" | "processing" | "queued"; slug: string }
   | { ok: false; status: "invalid_url"; error: string };
 
-export type PirateWiresUrlValidation =
-  | { ok: true; url: string; slug: string }
+export type ArticleUrlValidation =
+  | { ok: true; url: string; slug: string; sourceType: ArticleSourceType; sourceName: string }
   | { ok: false; error: string };
+
+export interface ArticleUrlValidationOptions {
+  resolveUrl?: (url: string) => Promise<string>;
+}
 
 export function buildBacklogItems(input: BuildBacklogItemsInput): BacklogItem[] {
   return filterVoiceExcludedArticles(input.articles).map((article) => {
@@ -64,6 +71,9 @@ export function buildBacklogItems(input: BuildBacklogItemsInput): BacklogItem[] 
       publishedAt: article.publishedAt,
       description: article.description,
       url: article.url,
+      sourceType: article.sourceType,
+      sourceName: article.sourceName,
+      canonicalUrl: article.canonicalUrl,
       converted: isConverted(article, input.manifest),
       processing: input.processingSlugs.has(slug),
     };
@@ -108,7 +118,7 @@ export async function queueBacklogConversion(
 export async function queueBacklogUrlConversion(
   input: QueueBacklogUrlConversionInput,
 ): Promise<QueueBacklogUrlConversionResult> {
-  const validation = validatePirateWiresArticleUrl(input.url);
+  const validation = await validateArticleUrl(input.url);
   if (!validation.ok) {
     return { ok: false, status: "invalid_url", error: validation.error };
   }
@@ -119,8 +129,11 @@ export async function queueBacklogUrlConversion(
     url: validation.url,
     author: "",
     publishedAt: "",
-    description: "Queued from pasted Pirate Wires URL.",
+    description: `Queued from pasted ${validation.sourceName} URL.`,
     slug: validation.slug,
+    sourceType: validation.sourceType,
+    sourceName: validation.sourceName,
+    canonicalUrl: validation.url,
   };
   if (isConverted(article, input.manifest)) {
     return { ok: true, status: "converted", slug: validation.slug };
@@ -140,7 +153,10 @@ export async function queueBacklogUrlConversion(
   return { ok: true, status: "queued", slug: validation.slug };
 }
 
-export function validatePirateWiresArticleUrl(value: string): PirateWiresUrlValidation {
+export async function validateArticleUrl(
+  value: string,
+  options: ArticleUrlValidationOptions = {},
+): Promise<ArticleUrlValidation> {
   let url: URL;
   try {
     url = new URL(value.trim());
@@ -151,27 +167,70 @@ export function validatePirateWiresArticleUrl(value: string): PirateWiresUrlVali
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     return { ok: false, error: "Enter a valid URL." };
   }
-  if (url.hostname !== "piratewires.com" && url.hostname !== "www.piratewires.com") {
-    return { ok: false, error: "Enter a Pirate Wires URL from piratewires.com." };
+
+  if (url.hostname === "open.substack.com") {
+    const resolved = await resolveOpenSubstackUrl(url.toString(), options.resolveUrl);
+    if (!resolved.ok) {
+      return resolved;
+    }
+    url = new URL(resolved.url);
   }
 
   const parts = url.pathname.split("/").filter(Boolean);
   if (parts[0] !== "p" || !parts[1]) {
     return {
       ok: false,
-      error: "Enter a Pirate Wires article URL like https://www.piratewires.com/p/story-slug.",
+      error: "Enter an article URL with a /p/story-slug path.",
     };
   }
 
   url.hash = "";
   url.search = "";
   const slug = slugFromUrl(url.toString());
-  return { ok: true, url: url.toString(), slug };
+  const source = sourceForUrl(url);
+  if (!source) {
+    return { ok: false, error: "Enter a supported article URL from Pirate Wires or Substack." };
+  }
+  const canonicalUrl = canonicalArticleUrl(url, source.sourceType);
+  return { ok: true, url: canonicalUrl, slug, ...source };
+}
+
+export function validatePirateWiresArticleUrl(value: string): ArticleUrlValidation {
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    return { ok: false, error: "Enter a valid URL." };
+  }
+  if (url.hostname !== "piratewires.com" && url.hostname !== "www.piratewires.com") {
+    return { ok: false, error: "Enter a Pirate Wires URL from piratewires.com." };
+  }
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (parts[0] !== "p" || !parts[1]) {
+    return {
+      ok: false,
+      error: "Enter an article URL with a /p/story-slug path.",
+    };
+  }
+  url.hash = "";
+  url.search = "";
+  return {
+    ok: true,
+    url: url.toString(),
+    slug: slugFromUrl(url.toString()),
+    sourceType: "pirate-wires",
+    sourceName: "Pirate Wires",
+  };
 }
 
 function isConverted(article: PirateArticle, manifest: LibraryManifest): boolean {
   const slug = article.slug ?? slugFromUrl(article.url);
-  return manifest.items.some((item) => item.slug === slug || item.sourceUrl === article.url);
+  return manifest.items.some(
+    (item) =>
+      item.slug === slug ||
+      item.sourceUrl === article.url ||
+      Boolean(item.canonicalUrl && article.canonicalUrl && item.canonicalUrl === article.canonicalUrl),
+  );
 }
 
 function titleFromSlug(slug: string): string {
@@ -179,5 +238,50 @@ function titleFromSlug(slug: string): string {
     .split("-")
     .filter(Boolean)
     .map((part) => part[0]?.toUpperCase() + part.slice(1))
-    .join(" ") || "Pirate Wires Article";
+    .join(" ") || "Article";
+}
+
+async function resolveOpenSubstackUrl(
+  url: string,
+  resolver?: (url: string) => Promise<string>,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const resolved = resolver
+      ? await resolver(url)
+      : (await fetch(url, { redirect: "follow" })).url;
+    return { ok: true, url: resolved };
+  } catch {
+    return { ok: false, error: "Could not resolve the Substack share URL." };
+  }
+}
+
+function sourceForUrl(
+  url: URL,
+): { sourceType: ArticleSourceType; sourceName: string } | undefined {
+  if (url.hostname === "piratewires.com" || url.hostname === "www.piratewires.com") {
+    return { sourceType: "pirate-wires", sourceName: "Pirate Wires" };
+  }
+  if (url.hostname === "piratewires.substack.com") {
+    return { sourceType: "pirate-wires", sourceName: "Pirate Wires" };
+  }
+  if (url.hostname === "www.hyperdimensional.co" || url.hostname === "hyperdimensional.co") {
+    return { sourceType: "substack", sourceName: "Hyperdimensional" };
+  }
+  if (url.hostname.endsWith(".substack.com")) {
+    return { sourceType: "substack", sourceName: titleFromSlug(url.hostname.split(".")[0] ?? "Substack") };
+  }
+  return undefined;
+}
+
+function canonicalArticleUrl(url: URL, sourceType: ArticleSourceType): string {
+  const next = new URL(url.toString());
+  next.hash = "";
+  next.search = "";
+  if (sourceType === "pirate-wires" && next.hostname === "piratewires.substack.com") {
+    next.hostname = "www.piratewires.com";
+  }
+  if (next.hostname === "hyperdimensional.co") {
+    next.hostname = "www.hyperdimensional.co";
+  }
+  return next.toString();
 }

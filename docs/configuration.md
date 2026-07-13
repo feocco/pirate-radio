@@ -10,7 +10,8 @@ The app reads configuration from environment variables.
 | `PIRATE_RADIO_PUBLIC_URL` | local service URL | URL placed in notifications. |
 | `PIRATE_RADIO_LIBRARY_DIR` | `output/library` | Durable text, JSON, audio, cached images, playback progress, optional alignment, and manifest root. |
 | `PIRATE_RADIO_STATE_PATH` | `<library>/state.json` | Seen/pending/decision state file. |
-| `PIRATE_RADIO_FEED_URL` | Substack RSS feed | Feed to poll. |
+| `PIRATE_RADIO_FEED_URL` | Pirate Wires RSS feed | Legacy/simple single-feed override. If set without `PIRATE_RADIO_FEEDS`, only Pirate Wires is polled at this URL. |
+| `PIRATE_RADIO_FEEDS` | Pirate Wires + Hyperdimensional | JSON array of `{ "id", "name", "type", "url" }` feed configs. `type` is `pirate-wires` or `substack`. |
 | `PIRATE_RADIO_POLL_INTERVAL_MS` | `900000` | Poll interval. |
 | `PIRATE_RADIO_MAX_NOTIFICATIONS_PER_POLL` | `1` | Notification cap per poll. |
 | `PIRATE_RADIO_ENABLE_ALIGNMENT` | `false` | Set to `true` to run the optional post-TTS Whisper word-timestamp prototype. |

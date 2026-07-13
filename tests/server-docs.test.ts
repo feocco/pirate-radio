@@ -12,6 +12,7 @@ const baseConfig: PirateRadioConfig = {
   pollIntervalMs: 60_000,
   maxNotificationsPerPoll: 1,
   feedUrl: "https://piratewires.substack.com/feed.xml",
+  feeds: [{ id: "pirate-wires", name: "Pirate Wires", type: "pirate-wires", url: "https://piratewires.substack.com/feed.xml" }],
   enableAlignment: false,
 };
 
@@ -81,7 +82,9 @@ describe("service docs endpoints", () => {
     expect(body.openapi).toBe("3.1.0");
     expect(body.info.title).toBe("Pirate Radio API");
     expect(body.paths["/health"]).toBeDefined();
-    expect(body.paths["/backlog/convert/{slug}"]).toBeDefined();
+    expect(body.paths["/queue"]).toBeDefined();
+    expect(body.paths["/queue.json"]).toBeDefined();
+    expect(body.paths["/queue/convert/{slug}"]).toBeDefined();
     expect(body.paths["/progress/{slug}"]).toBeDefined();
     expect(body.paths["/docs"]).toBeDefined();
   });

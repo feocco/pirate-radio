@@ -24,34 +24,68 @@ describe("reader page", () => {
     expect(html).toContain("Read");
     expect(html).toContain("Download MP3");
     expect(html).toContain("Pirate Radio");
-    expect(html).toContain('href="/backlog"');
+    expect(html).toContain('href="/queue"');
     expect(html).toContain('href="/admin"');
     expect(html).toContain('<a class="brandlink active" href="/" aria-label="Pirate Radio home">');
     expect(html).not.toContain('href="/">Pirate Wires</a>');
     expect(html).not.toContain("Culture");
   });
 
-  test("renders a backlog page with search, pagination, and convert controls", () => {
+  test("renders a queue page with search, pagination, and convert controls", () => {
     const html = renderBacklogHtml();
 
-    expect(html).toContain("/backlog.json");
-    expect(html).toContain("/backlog/convert/");
-    expect(html).toContain("/backlog/convert-url");
-    expect(html).toContain("/backlog/convert-text");
-    expect(html).toContain("Paste Pirate Wires article URL");
+    expect(html).toContain("/queue.json");
+    expect(html).toContain("/queue/convert/");
+    expect(html).toContain("/queue/convert-url");
+    expect(html).toContain("/queue/convert-text");
+    expect(html).toContain("Paste article URL");
     expect(html).toContain("Custom text title");
     expect(html).toContain("Paste text to convert");
     expect(html).toContain("queueText");
     expect(html).toContain("queueUrl");
-    expect(html).toContain("backlog-list");
-    expect(html).toContain("backlog-row");
+    expect(html).toContain("queue-list");
+    expect(html).toContain("queue-row");
     expect(html).toContain("All recent");
     expect(html).toContain("Search");
     expect(html).toContain("Convert");
     expect(html).toContain("pageSize = 10");
     expect(html).not.toContain('placeholder.textContent = "PW"');
-    expect(html).toContain('<a class="navlink active" href="/backlog">Backlog</a>');
+    expect(html).toContain('<a class="navlink active" href="/queue">Queue</a>');
     expect(html).toContain('<a class="brandlink" href="/" aria-label="Pirate Radio home">');
+  });
+
+  test("renders source names when article metadata includes them", () => {
+    const story: Story = {
+      sourceUrl: "https://www.hyperdimensional.co/p/what-should-be-done",
+      title: "What Should Be Done",
+      tagline: "How to get past improvised model licensing",
+      text: "Body paragraph.",
+      wordCount: 2,
+      characterCount: 15,
+      extractedAt: "2026-07-13T00:00:00.000Z",
+    };
+    const item: LibraryItem = {
+      slug: "what-should-be-done",
+      title: story.title,
+      sourceUrl: story.sourceUrl,
+      sourceType: "substack",
+      sourceName: "Hyperdimensional",
+      canonicalUrl: story.sourceUrl,
+      publishedAt: "Fri, 26 Jun 2026 11:45:17 GMT",
+      generatedAt: "2026-07-13T00:00:00.000Z",
+      audioPath: "/tmp/audio.mp3",
+      audioUrl: "/audio/what-should-be-done.mp3",
+      jsonPath: "/tmp/story.json",
+      textPath: "/tmp/story.txt",
+      estimatedCostUsd: 0.01,
+      wordCount: 2,
+      characterCount: 15,
+      audioBytes: 100,
+    };
+
+    const html = renderArticleHtml(story, item);
+
+    expect(html).toContain("Hyperdimensional");
   });
 
   test("renders an admin page with the admin nav tab active", () => {
@@ -60,7 +94,7 @@ describe("reader page", () => {
     expect(html).toContain("<h1>Admin</h1>");
     expect(html).toContain("/health");
     expect(html).toContain("/library.json");
-    expect(html).toContain("/backlog.json");
+    expect(html).toContain("/queue.json");
     expect(html).toContain('<a class="navlink active" href="/admin">Admin</a>');
     expect(html).not.toContain("Culture");
   });

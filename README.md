@@ -85,7 +85,7 @@ npm run build
 npm start
 ```
 
-`serve` polls the Substack RSS feed, sends Home Assistant mobile actions via
+`serve` polls the configured RSS feeds, sends Home Assistant mobile actions via
 homelab-functions, listens for the mobile action event over Home Assistant
 WebSocket, and writes the reader library under `PIRATE_RADIO_LIBRARY_DIR`. Set
 `PWR_HEADLESS=true` for Docker or any headless host.
@@ -106,20 +106,20 @@ The reader serves:
 - `/` for the audio library with cached article art.
 - `/docs` for a browser-friendly summary of the service HTTP contract and
   `/openapi.json` for the OpenAPI 3.1 document.
-- `/backlog` for recent RSS articles that have not been converted yet, with
-  search, pagination, async conversion buttons, and a pasted Pirate Wires URL
-  queue plus custom text entry.
+- `/queue` for recent RSS articles that have not been converted yet, with
+  search, pagination, async conversion buttons, pasted article URLs, and custom
+  text entry.
 - `/article/<slug>` for a dedicated article page with audio and full text.
 - `/progress/<slug>` for cross-device playback position.
 - `/audio/<slug>.mp3`, `/images/<slug>.<ext>`, and optional
   `/alignment/<slug>.json` assets.
 
-The backlog list is RSS-window-only in v1. It compares the current feed against
-the library manifest, then queues selected articles through the same approval,
-extraction, TTS, and notification workflow used by mobile actions. Pasted
-`piratewires.com/p/...` URLs can also be queued from the backlog page. Custom
-title/text entries bypass Pirate Wires extraction and write directly into the
-same reader library after TTS generation.
+The queue list is RSS-window-only in v1. It compares the current configured
+feeds against the library manifest, then queues selected articles through the
+same approval, extraction, TTS, and notification workflow used by mobile
+actions. Pasted Pirate Wires, Hyperdimensional, and Substack `/p/...` URLs can
+also be queued from the queue page. Custom title/text entries bypass article
+extraction and write directly into the same reader library after TTS generation.
 
 Set `PIRATE_RADIO_ENABLE_ALIGNMENT=true` to prototype word-level highlighting.
 When enabled, the service runs a post-TTS `whisper-1` transcription with word

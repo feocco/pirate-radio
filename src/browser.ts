@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { validateArticleUrl } from "./backlog.js";
 import { extractStoryFromHtml } from "./extractor.js";
 import type { Story } from "./types.js";
 
@@ -26,11 +27,19 @@ export async function openLoginBrowser(): Promise<void> {
 }
 
 export async function extractStoryFromUrl(url: string): Promise<Story> {
+  const validation = await validateArticleUrl(url);
+  if (!validation.ok) {
+    throw new Error(validation.error);
+  }
+  if (validation.sourceType === "substack") {
+    return extractPublicStoryFromUrl(validation.url);
+  }
+
   const context = await chromium.launchPersistentContext(profileDirFromEnv(), {
     headless: process.env.PWR_HEADLESS === "true",
   });
   const page = context.pages()[0] ?? (await context.newPage());
-  const articleUrl = canonicalPirateWiresUrl(url);
+  const articleUrl = validation.url;
 
   try {
     await page.goto(articleUrl, { waitUntil: "networkidle", timeout: 60_000 });
@@ -46,6 +55,19 @@ export async function extractStoryFromUrl(url: string): Promise<Story> {
   } finally {
     await context.close();
   }
+}
+
+async function extractPublicStoryFromUrl(url: string): Promise<Story> {
+  const response = await fetch(url, {
+    headers: {
+      accept: "text/html,application/xhtml+xml",
+      "user-agent": "pirate-radio/0.1",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Could not load article: ${response.status} ${response.statusText}`);
+  }
+  return extractStoryFromHtml(await response.text(), url);
 }
 
 export function canonicalPirateWiresUrl(url: string): string {

@@ -39,4 +39,20 @@ describe("extractStoryFromHtml", () => {
     expect(story.wordCount).toBe(27);
     expect(story.characterCount).toBe(story.text.length);
   });
+
+  test("extracts public Substack post metadata and body from fixture HTML", async () => {
+    const html = await readFile("tests/fixtures/substack-story.html", "utf8");
+
+    const story = extractStoryFromHtml(html, "https://www.hyperdimensional.co/p/what-should-be-done");
+
+    expect(story.title).toBe("What Should Be Done");
+    expect(story.tagline).toBe("How to get past improvised model licensing");
+    expect(story.heroImageOriginalUrl).toBe("https://substackcdn.com/image/fetch/hero.png");
+    expect(story.sectionTitles).toEqual(["On the Current State of Affairs", "What Should Be Done"]);
+    expect(story.text).toContain("First real body paragraph with a frontier model discussion.");
+    expect(story.text).toContain("A quoted passage from the article.");
+    expect(story.text).toContain("A numbered recommendation from the article.");
+    expect(story.text).not.toContain("Subscribe now");
+    expect(story.text).not.toContain("This is a reader comment.");
+  });
 });

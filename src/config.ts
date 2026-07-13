@@ -1,3 +1,5 @@
+import { DEFAULT_FEEDS, type ArticleFeedConfig } from "./feed.js";
+
 export interface PirateRadioConfig {
   port: number;
   host: string;
@@ -7,6 +9,7 @@ export interface PirateRadioConfig {
   pollIntervalMs: number;
   maxNotificationsPerPoll: number;
   feedUrl: string;
+  feeds: ArticleFeedConfig[];
   homelabFunctionsUrl?: string;
   homelabFunctionsToken?: string;
   haUrl?: string;
@@ -17,6 +20,12 @@ export interface PirateRadioConfig {
 
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): PirateRadioConfig {
   const libraryDir = env.PIRATE_RADIO_LIBRARY_DIR ?? "output/library";
+  const feedUrl = env.PIRATE_RADIO_FEED_URL ?? DEFAULT_FEEDS[0].url;
+  const feeds = parseFeeds(env.PIRATE_RADIO_FEEDS) ?? (
+    env.PIRATE_RADIO_FEED_URL
+      ? [{ ...DEFAULT_FEEDS[0], url: feedUrl }]
+      : DEFAULT_FEEDS
+  );
   return {
     port: Number(env.SERVICE_PORT ?? env.PORT ?? 8123),
     host: env.SERVICE_HOST ?? env.HOST_BIND_ADDR ?? "127.0.0.1",
@@ -25,7 +34,8 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): PirateRadio
     statePath: env.PIRATE_RADIO_STATE_PATH ?? `${libraryDir}/state.json`,
     pollIntervalMs: Number(env.PIRATE_RADIO_POLL_INTERVAL_MS ?? 15 * 60 * 1000),
     maxNotificationsPerPoll: Number(env.PIRATE_RADIO_MAX_NOTIFICATIONS_PER_POLL ?? 1),
-    feedUrl: env.PIRATE_RADIO_FEED_URL ?? "https://piratewires.substack.com/feed.xml",
+    feedUrl,
+    feeds,
     homelabFunctionsUrl: env.HOMELAB_FUNCTIONS_URL,
     homelabFunctionsToken: env.HOMELAB_FUNCTIONS_TOKEN,
     haUrl: env.HA_URL,
@@ -33,4 +43,20 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): PirateRadio
     reauthUrl: env.PIRATE_RADIO_REAUTH_URL,
     enableAlignment: env.PIRATE_RADIO_ENABLE_ALIGNMENT === "true",
   };
+}
+
+function parseFeeds(value: string | undefined): ArticleFeedConfig[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = JSON.parse(value) as ArticleFeedConfig[];
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error("PIRATE_RADIO_FEEDS must be a non-empty JSON array.");
+  }
+  return parsed.map((feed) => ({
+    id: String(feed.id),
+    name: String(feed.name),
+    type: feed.type === "pirate-wires" ? "pirate-wires" : "substack",
+    url: String(feed.url),
+  }));
 }
