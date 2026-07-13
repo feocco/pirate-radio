@@ -96,6 +96,11 @@ active profile path, and leaves the article pending so it can be retried. After
 successful audio generation, it sends a ready notification that opens the
 article page directly.
 
+When a feed is configured for the first time, Pirate Radio records its current
+articles as a baseline without sending notifications. Only articles discovered
+on later polls produce new-article notifications, so adding a publication does
+not replay its RSS history.
+
 Set `PIRATE_RADIO_REAUTH_URL` to the Tailnet-only login browser URL when a
 reauth browser is available. Auth failures then send a dedicated login-required
 notification whose tap target opens that browser, so the article can be retried

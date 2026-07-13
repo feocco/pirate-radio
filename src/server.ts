@@ -22,7 +22,13 @@ import { HomelabFunctionsNotifier, type Notifier } from "./notifier.js";
 import { readPlaybackProgress, writePlaybackProgress } from "./progress.js";
 import { renderAdminHtml, renderArticleHtml, renderBacklogHtml, renderReaderHtml } from "./reader.js";
 import { getPirateRadioOpenApiDocument, renderPirateRadioDocsHtml } from "./serviceDocs.js";
-import { readState, seenArticleIds, writeState, type PirateRadioState } from "./state.js";
+import {
+  baselineNewFeeds,
+  readState,
+  seenArticleIds,
+  writeState,
+  type PirateRadioState,
+} from "./state.js";
 import { createTtsProvider } from "./tts/index.js";
 import {
   createCustomTextAudio,
@@ -98,12 +104,16 @@ export class PirateRadioService {
   async pollOnce(): Promise<void> {
     const state = await this.getState();
     const articles = await fetchArticleFeeds(this.options.config.feeds);
+    const baselines = baselineNewFeeds(state, articles, this.options.config.feeds);
+    for (const baseline of baselines) {
+      console.log(
+        `[pirate-radio] baselined ${baseline.articleCount} existing articles for new feed ${baseline.feedId}`,
+      );
+    }
     const unseen = detectNewArticles(articles, seenArticleIds(state));
     const toNotify = unseen.slice(0, this.options.config.maxNotificationsPerPoll);
 
-    const firstRun = !state.initialized;
-    const articlesToMarkSeen = firstRun ? unseen : toNotify;
-    for (const article of articlesToMarkSeen) {
+    for (const article of toNotify) {
       state.seen[article.id] = article;
     }
     state.initialized = true;

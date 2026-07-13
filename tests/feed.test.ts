@@ -70,6 +70,7 @@ describe("multi-source RSS monitor", () => {
       author: "Dean W. Ball",
       publishedAt: "Fri, 26 Jun 2026 11:45:17 GMT",
       description: "How to get past improvised model licensing",
+      sourceId: "hyperdimensional",
       sourceType: "substack",
       sourceName: "Hyperdimensional",
       slug: "what-should-be-done",

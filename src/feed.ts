@@ -18,6 +18,7 @@ export interface PirateArticle {
   author: string;
   publishedAt: string;
   description: string;
+  sourceId?: string;
   slug?: string;
   sourceType?: ArticleSourceType;
   sourceName?: string;
@@ -112,6 +113,7 @@ function parseFeedItem(itemXml: string, feed: ArticleFeedConfig): PirateArticle 
     author: pickTag(itemXml, "dc:creator") || "",
     publishedAt: pickTag(itemXml, "pubDate") || "",
     description: pickTag(itemXml, "description") || "",
+    sourceId: feed.id,
     sourceType: feed.type,
     sourceName: feed.name,
     canonicalUrl: url,
