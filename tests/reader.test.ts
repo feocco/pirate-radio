@@ -7,6 +7,7 @@ import {
 } from "../src/reader.js";
 import type { LibraryItem } from "../src/library.js";
 import type { Story } from "../src/types.js";
+import { memberUser } from "./support/fakes.js";
 
 describe("reader page", () => {
   test("renders an audio reader that persists playback position in localStorage", () => {
@@ -35,6 +36,18 @@ describe("reader page", () => {
     expect(html).toContain('<a class="brandlink active" href="/" aria-label="Pirate Radio home">');
     expect(html).not.toContain('href="/">Pirate Wires</a>');
     expect(html).not.toContain("Culture");
+  });
+
+  test("renders a compact account menu with central profile and native logout actions", () => {
+    const html = renderReaderHtml(memberUser, "https://auth.example.com/if/user/#/settings");
+
+    expect(html).toContain('class="account-menu"');
+    expect(html).toContain("Account menu for member");
+    expect(html).toContain('class="account-avatar"');
+    expect(html).toContain('href="https://auth.example.com/if/user/#/settings"');
+    expect(html).toContain(">Edit profile</a>");
+    expect(html).toContain('method="post" action="/auth/logout"');
+    expect(html).not.toContain('location.href = "/auth/login"');
   });
 
   test("renders a queue page with search, pagination, and convert controls", () => {

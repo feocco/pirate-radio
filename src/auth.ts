@@ -20,17 +20,23 @@ export interface CallbackResult {
   user: ApplicationUser;
 }
 
+export interface LogoutResult {
+  sessionCookie: string;
+  location: string;
+}
+
 export interface Authenticator {
   initialize(): Promise<void>;
   login(requestUrl: URL): Promise<{ location: string; transactionCookie: string }>;
   callback(requestUrl: URL, cookieHeader: string | undefined): Promise<CallbackResult>;
   authenticate(cookieHeader: string | undefined): Promise<AuthenticatedRequest | undefined>;
-  logout(cookieHeader: string | undefined): Promise<string>;
+  logout(cookieHeader: string | undefined): Promise<LogoutResult>;
 }
 
 export interface OidcProtocol {
   initialize(input: { issuer: string; clientId: string; clientSecret: string }): Promise<void>;
   authorizationUrl(parameters: Record<string, string>): string;
+  endSessionUrl(parameters: Record<string, string>): string;
   exchange(requestUrl: URL, checks: { codeVerifier: string; state: string; nonce: string }): Promise<Record<string, unknown>>;
 }
 
@@ -43,6 +49,10 @@ class OpenIdClientProtocol implements OidcProtocol {
 
   authorizationUrl(parameters: Record<string, string>): string {
     return oidc.buildAuthorizationUrl(this.requiredConfiguration(), parameters).href;
+  }
+
+  endSessionUrl(parameters: Record<string, string>): string {
+    return oidc.buildEndSessionUrl(this.requiredConfiguration(), parameters).href;
   }
 
   async exchange(requestUrl: URL, checks: { codeVerifier: string; state: string; nonce: string }): Promise<Record<string, unknown>> {
@@ -142,10 +152,15 @@ export class OidcAuthenticator implements Authenticator {
     return { user, isAdmin: user.groups.includes(this.config.adminGroup) };
   }
 
-  async logout(cookieHeader: string | undefined): Promise<string> {
+  async logout(cookieHeader: string | undefined): Promise<LogoutResult> {
     const token = parseCookies(cookieHeader)[SESSION_COOKIE];
     if (token) await this.store.revokeSession(hashToken(token));
-    return clearCookie(SESSION_COOKIE);
+    return {
+      sessionCookie: clearCookie(SESSION_COOKIE),
+      location: this.protocol.endSessionUrl({
+        post_logout_redirect_uri: `${this.baseUrl()}/`,
+      }),
+    };
   }
 
   private baseUrl(): string {

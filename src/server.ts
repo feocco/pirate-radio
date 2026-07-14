@@ -282,8 +282,12 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       return;
     }
     if (request.method === "POST" && url.pathname === "/auth/logout") {
-      const sessionCookie = await options.authenticator.logout(request.headers.cookie);
-      response.writeHead(204, { "set-cookie": sessionCookie, "cache-control": "no-store" });
+      const result = await options.authenticator.logout(request.headers.cookie);
+      response.writeHead(303, {
+        location: result.location,
+        "set-cookie": result.sessionCookie,
+        "cache-control": "no-store",
+      });
       response.end();
       return;
     }
@@ -300,15 +304,15 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       return;
     }
     if (request.method === "GET" && url.pathname === "/") {
-      html(response, renderReaderHtml(principal.user));
+      html(response, renderReaderHtml(principal.user, options.config.identitySettingsUrl));
       return;
     }
     if (request.method === "GET" && (url.pathname === "/queue" || url.pathname === "/backlog")) {
-      html(response, renderBacklogHtml(principal.user));
+      html(response, renderBacklogHtml(principal.user, options.config.identitySettingsUrl));
       return;
     }
     if (request.method === "GET" && url.pathname === "/admin") {
-      html(response, renderAdminHtml(principal.user));
+      html(response, renderAdminHtml(principal.user, options.config.identitySettingsUrl));
       return;
     }
     if (request.method === "GET" && (url.pathname === "/queue.json" || url.pathname === "/backlog.json")) {
@@ -459,7 +463,14 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       return;
     }
     if (request.method === "GET" && url.pathname.startsWith("/article/")) {
-      await renderArticle(response, options.config.libraryDir, decodeURIComponent(url.pathname), options.store, principal.user);
+      await renderArticle(
+        response,
+        options.config.libraryDir,
+        decodeURIComponent(url.pathname),
+        options.store,
+        principal.user,
+        options.config.identitySettingsUrl,
+      );
       return;
     }
     if (request.method === "GET" && url.pathname.startsWith("/progress/")) {
@@ -601,6 +612,7 @@ async function renderArticle(
   pathname: string,
   store: PirateRadioStore,
   user: AuthenticatedRequest["user"],
+  identitySettingsUrl?: string,
 ): Promise<void> {
   const slug = basename(pathname);
   const manifest = await readLibraryManifest(libraryDir);
@@ -614,7 +626,7 @@ async function renderArticle(
     store.completedUsers(slug),
     store.firstSuccessfulSubmitter(slug),
   ]);
-  html(response, renderArticleHtml(story, item, { user, completedUsers, submittedBy }));
+  html(response, renderArticleHtml(story, item, { user, completedUsers, submittedBy, identitySettingsUrl }));
 }
 
 async function streamAudio(
