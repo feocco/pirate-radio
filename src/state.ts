@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { ArticleFeedConfig, PirateArticle } from "./feed.js";
+const stateWriteQueues = new Map<string, Promise<void>>();
 
 export interface ArticleDecisionRecord {
   article: PirateArticle;
@@ -67,8 +68,19 @@ export function baselineNewFeeds(
 }
 
 export async function writeState(statePath: string, state: PirateRadioState): Promise<void> {
-  await mkdir(dirname(statePath), { recursive: true });
-  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  const previous = stateWriteQueues.get(statePath) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(async () => {
+    await mkdir(dirname(statePath), { recursive: true });
+    const temporary = `${statePath}.${process.pid}.${Date.now()}.tmp`;
+    await writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+    await rename(temporary, statePath);
+  });
+  stateWriteQueues.set(statePath, next);
+  try {
+    await next;
+  } finally {
+    if (stateWriteQueues.get(statePath) === next) stateWriteQueues.delete(statePath);
+  }
 }
 
 export function seenArticleIds(state: PirateRadioState): Set<string> {

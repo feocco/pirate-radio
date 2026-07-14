@@ -1,4 +1,5 @@
 import type { LibraryItem } from "./library.js";
+import type { ApplicationUser } from "./identity.js";
 import type { Story, StoryContentBlock } from "./types.js";
 
 const sharedCss = `
@@ -91,7 +92,7 @@ const sharedCss = `
   }
 `;
 
-export function renderReaderHtml(): string {
+export function renderReaderHtml(user?: ApplicationUser): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -101,7 +102,7 @@ export function renderReaderHtml(): string {
   <style>${sharedCss}</style>
 </head>
 <body>
-  ${renderChrome("library")}
+  ${renderChrome("library", user)}
   <section class="hero wrap">
     <div class="kicker">Audio dispatches</div>
     <h1>Pirate Radio</h1>
@@ -122,7 +123,7 @@ export function renderReaderHtml(): string {
     const root = document.getElementById("library");
     const sourceFilter = document.getElementById("source-filter");
     const sortOrder = document.getElementById("sort-order");
-    const keyFor = (slug) => "pirate-radio-position:" + slug;
+    const keyFor = (slug) => "pirate-radio-position:${user?.id ?? "anonymous"}:" + slug;
     const progressTimers = new Map();
     let libraryItems = [];
 
@@ -150,7 +151,7 @@ export function renderReaderHtml(): string {
       applySavedProgress(audio, localStorage.getItem(keyFor(slug)));
     }
 
-    function saveProgress(slug, audio, immediate = false) {
+    function saveProgress(slug, audio, immediate = false, ended = false) {
       if (!Number.isFinite(audio.currentTime)) return;
       localStorage.setItem(keyFor(slug), String(audio.currentTime));
       clearTimeout(progressTimers.get(slug));
@@ -162,6 +163,7 @@ export function renderReaderHtml(): string {
           body: JSON.stringify({
             positionSeconds: audio.currentTime,
             durationSeconds: Number.isFinite(audio.duration) ? audio.duration : undefined,
+            ended,
           }),
         }).catch(() => {});
       };
@@ -274,7 +276,7 @@ export function renderReaderHtml(): string {
       audio.addEventListener("loadedmetadata", () => restoreProgress(item.slug, audio));
       audio.addEventListener("timeupdate", () => saveProgress(item.slug, audio));
       audio.addEventListener("pause", () => saveProgress(item.slug, audio, true));
-      audio.addEventListener("ended", () => saveProgress(item.slug, audio, true));
+      audio.addEventListener("ended", () => saveProgress(item.slug, audio, true, true));
       window.addEventListener("pagehide", () => saveProgress(item.slug, audio, true));
       actions.append(readLink, downloadLink);
       content.append(heading, meta);
@@ -303,7 +305,7 @@ export function renderReaderHtml(): string {
 </html>`;
 }
 
-export function renderBacklogHtml(): string {
+export function renderBacklogHtml(user?: ApplicationUser): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -313,7 +315,7 @@ export function renderBacklogHtml(): string {
   <style>${sharedCss}</style>
 </head>
 <body>
-  ${renderChrome("backlog")}
+  ${renderChrome("backlog", user)}
   <section class="hero wrap">
     <div class="kicker">Audio queue</div>
     <h1>Queue</h1>
@@ -341,6 +343,11 @@ export function renderBacklogHtml(): string {
     <span id="page"></span>
     <button id="next" class="button" type="button">Next</button>
   </nav>
+  <section class="hero wrap">
+    <div class="kicker">Recent activity</div>
+    <h2>Submissions</h2>
+  </section>
+  <main id="submissions" class="queue-list wrap">Loading...</main>
   <script>
     const pageSize = 10;
     const root = document.getElementById("queue");
@@ -359,6 +366,7 @@ export function renderBacklogHtml(): string {
     const customText = document.getElementById("custom-text");
     const queueTextButton = document.getElementById("queue-text");
     const textStatus = document.getElementById("text-status");
+    const submissionsRoot = document.getElementById("submissions");
     let items = [];
     let pageIndex = 0;
     let pollTimer;
@@ -438,6 +446,27 @@ export function renderBacklogHtml(): string {
       items = Array.isArray(payload.items) ? payload.items : [];
       render();
       schedulePolling();
+    }
+
+    async function loadSubmissions() {
+      const response = await fetch("/submissions.json", { cache: "no-store" });
+      if (!response.ok) throw new Error("Could not load submissions");
+      const payload = await response.json();
+      submissionsRoot.textContent = "";
+      for (const item of (Array.isArray(payload.items) ? payload.items : [])) {
+        const row = document.createElement("section");
+        row.className = "queue-row";
+        const label = document.createElement("div");
+        const heading = document.createElement("h2");
+        heading.textContent = item.title || item.slug || item.sourceUrl || "Submission";
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = [item.type, item.status, item.submittedByUsername ? "by " + item.submittedByUsername : "Added automatically", item.createdAt].join(" - ");
+        label.append(heading, meta);
+        row.append(label);
+        submissionsRoot.append(row);
+      }
+      if (!submissionsRoot.children.length) submissionsRoot.textContent = "No submissions yet.";
     }
 
     async function convertItem(slug, button) {
@@ -532,12 +561,17 @@ export function renderBacklogHtml(): string {
     loadBacklog().catch((error) => {
       root.textContent = error.message;
     });
+    loadSubmissions().catch((error) => { submissionsRoot.textContent = error.message; });
   </script>
 </body>
 </html>`;
 }
 
-export function renderArticleHtml(story: Story, item: LibraryItem): string {
+export function renderArticleHtml(
+  story: Story,
+  item: LibraryItem,
+  identity: { user?: ApplicationUser; completedUsers?: ApplicationUser[]; submittedBy?: ApplicationUser } = {},
+): string {
   const blocks = story.contentBlocks?.length
     ? story.contentBlocks
     : story.text.split(/\n{2,}/).filter(Boolean).map((text) => ({ type: "paragraph", text }) as StoryContentBlock);
@@ -550,7 +584,7 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
   <style>${sharedCss}</style>
 </head>
 <body>
-  ${renderChrome("library")}
+  ${renderChrome("library", identity.user)}
   <article class="article-shell">
     <header class="article-hero">
       <div class="kicker">${escapeHtml(item.sourceName ?? "Pirate Radio")}</div>
@@ -560,6 +594,10 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
     <div class="article-meta">
       <div>${escapeHtml(item.publishedAt || "Generated article")}</div>
       <div>${item.wordCount} words</div>
+    </div>
+    <div class="article-meta">
+      <div>${identity.submittedBy ? `Submitted by ${escapeHtml(identity.submittedBy.username)}` : "Added automatically"}</div>
+      <div>${identity.completedUsers?.length ? `Finished by ${identity.completedUsers.map((candidate) => escapeHtml(candidate.username)).join(", ")}` : "No finishes yet"}</div>
     </div>
     ${story.heroImageUrl || item.imageUrl ? `<img class="hero-image" src="${escapeAttribute(story.heroImageUrl ?? item.imageUrl ?? "")}" alt="">` : ""}
     <section class="player-panel">
@@ -573,7 +611,7 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
   </article>
   <script>
     const slug = ${JSON.stringify(item.slug)};
-    const keyFor = (slug) => "pirate-radio-position:" + slug;
+    const keyFor = (slug) => "pirate-radio-position:${identity.user?.id ?? "anonymous"}:" + slug;
     let progressTimer;
     const audio = document.getElementById("article-audio");
 
@@ -597,7 +635,7 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
       applySavedProgress(audio, localStorage.getItem(keyFor(slug)));
     }
 
-    function saveProgress(slug, audio, immediate = false) {
+    function saveProgress(slug, audio, immediate = false, ended = false) {
       if (!Number.isFinite(audio.currentTime)) return;
       localStorage.setItem(keyFor(slug), String(audio.currentTime));
       clearTimeout(progressTimer);
@@ -609,6 +647,7 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
           body: JSON.stringify({
             positionSeconds: audio.currentTime,
             durationSeconds: Number.isFinite(audio.duration) ? audio.duration : undefined,
+            ended,
           }),
         }).catch(() => {});
       };
@@ -622,7 +661,7 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
     audio.addEventListener("loadedmetadata", () => restoreProgress(slug, audio));
     audio.addEventListener("timeupdate", () => saveProgress(slug, audio));
     audio.addEventListener("pause", () => saveProgress(slug, audio, true));
-    audio.addEventListener("ended", () => saveProgress(slug, audio, true));
+    audio.addEventListener("ended", () => saveProgress(slug, audio, true, true));
     window.addEventListener("pagehide", () => saveProgress(slug, audio, true));
     ${item.hasAlignment && item.alignmentUrl ? renderAlignmentScript(item.alignmentUrl) : ""}
   </script>
@@ -630,7 +669,7 @@ export function renderArticleHtml(story: Story, item: LibraryItem): string {
 </html>`;
 }
 
-export function renderAdminHtml(): string {
+export function renderAdminHtml(user?: ApplicationUser): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -640,7 +679,7 @@ export function renderAdminHtml(): string {
   <style>${sharedCss}</style>
 </head>
 <body>
-  ${renderChrome("admin")}
+  ${renderChrome("admin", user)}
   <section class="hero wrap">
     <div class="kicker">Service status</div>
     <h1>Admin</h1>
@@ -673,19 +712,19 @@ export function renderAdminHtml(): string {
 
 type ActivePage = "library" | "backlog" | "admin";
 
-function renderChrome(activePage: ActivePage): string {
+function renderChrome(activePage: ActivePage, user?: ApplicationUser): string {
   const brandClass = activePage === "library" ? "brandlink active" : "brandlink";
   const items = [
     { page: "backlog", href: "/queue", label: "Queue" },
-    { page: "admin", href: "/admin", label: "Admin" },
+    ...(!user || user.groups.includes("pirate-radio-admins") ? [{ page: "admin" as const, href: "/admin", label: "Admin" }] : []),
   ] as const;
-  return `<div class="brandbar"><a class="${brandClass}" href="/" aria-label="Pirate Radio home"><span class="mark">PW</span><span>Pirate Radio</span></a><div>AI-generated audio</div></div>
+  return `<div class="brandbar"><a class="${brandClass}" href="/" aria-label="Pirate Radio home"><span class="mark">PW</span><span>Pirate Radio</span></a><div>${user ? `${escapeHtml(user.username)} <button class="button" id="logout" type="button">Log out</button>` : "AI-generated audio"}</div></div>
   <nav class="topbar" aria-label="Primary">${items
     .map(
       (item) =>
         `<a class="navlink ${item.page === activePage ? "active" : ""}" href="${item.href}">${item.label}</a>`,
     )
-    .join("")}</nav>`;
+    .join("")}</nav>${user ? `<script>document.getElementById("logout").addEventListener("click", async () => { await fetch("/auth/logout", { method: "POST" }); location.href = "/auth/login"; });</script>` : ""}`;
 }
 
 function renderBlock(block: StoryContentBlock): string {

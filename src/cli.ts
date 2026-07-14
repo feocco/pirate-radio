@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { Command } from "commander";
 import { openLoginBrowser, extractStoryFromUrl } from "./browser.js";
 import { configFromEnv } from "./config.js";
+import { validateIdentityConfig } from "./config.js";
+import { PirateRadioDatabase } from "./database.js";
 import { writeStoryOutputs } from "./output.js";
 import { PirateRadioService } from "./server.js";
 import { looksLikeUrl, readStoryJson } from "./storyFile.js";
@@ -109,6 +111,46 @@ program
     }
     const service = new PirateRadioService({ config: configFromEnv() });
     await service.decide(slug, decision);
+  });
+
+program
+  .command("migrate-progress")
+  .requiredOption("--user-id <id>", "Application user id returned by /auth/me")
+  .option("--expect-count <count>", "Required legacy record count", "12")
+  .description("Import legacy progress.json users.default rows into an OIDC application user.")
+  .action(async (options: { userId: string; expectCount: string }) => {
+    const config = configFromEnv();
+    validateIdentityConfig(config);
+    const database = new PirateRadioDatabase(config.databaseUrl!);
+    try {
+      await database.migrate();
+      if (!(await database.applicationUser(options.userId))) throw new Error(`Application user ${options.userId} does not exist. Log in normally first.`);
+      const result = await database.importLegacyProgress(config.libraryDir, options.userId);
+      const expected = Number(options.expectCount);
+      if (result.sourceCount !== expected || result.destinationCount !== expected) {
+        throw new Error(`Expected ${expected} legacy rows, got source=${result.sourceCount}, destination=${result.destinationCount}.`);
+      }
+      console.log(JSON.stringify(result));
+    } finally {
+      await database.close();
+    }
+  });
+
+program
+  .command("export-progress")
+  .requiredOption("--user-id <id>", "Application user id returned by /auth/me")
+  .description("Export one application user's database progress as rollback-compatible legacy JSON.")
+  .action(async (options: { userId: string }) => {
+    const config = configFromEnv();
+    validateIdentityConfig(config);
+    const database = new PirateRadioDatabase(config.databaseUrl!);
+    try {
+      await database.migrate();
+      if (!(await database.applicationUser(options.userId))) throw new Error(`Application user ${options.userId} does not exist.`);
+      console.log(JSON.stringify(await database.exportLegacyProgress(config.libraryDir, options.userId)));
+    } finally {
+      await database.close();
+    }
   });
 
 await program.parseAsync();

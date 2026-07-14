@@ -16,6 +16,14 @@ export interface PirateRadioConfig {
   haLongLivedToken?: string;
   reauthUrl?: string;
   enableAlignment: boolean;
+  databaseUrl?: string;
+  oidcIssuer?: string;
+  oidcClientId?: string;
+  oidcClientSecret?: string;
+  oidcScopes: string;
+  memberGroup: string;
+  adminGroup: string;
+  sessionLifetimeHours: number;
 }
 
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): PirateRadioConfig {
@@ -42,7 +50,30 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): PirateRadio
     haLongLivedToken: env.HA_LONG_LIVED_TOKEN,
     reauthUrl: env.PIRATE_RADIO_REAUTH_URL,
     enableAlignment: env.PIRATE_RADIO_ENABLE_ALIGNMENT === "true",
+    databaseUrl: env.DATABASE_URL,
+    oidcIssuer: env.PIRATE_RADIO_OIDC_ISSUER,
+    oidcClientId: env.PIRATE_RADIO_OIDC_CLIENT_ID,
+    oidcClientSecret: env.PIRATE_RADIO_OIDC_CLIENT_SECRET,
+    oidcScopes: env.PIRATE_RADIO_OIDC_SCOPES ?? "openid profile email groups",
+    memberGroup: env.PIRATE_RADIO_MEMBER_GROUP ?? "pirate-radio-users",
+    adminGroup: env.PIRATE_RADIO_ADMIN_GROUP ?? "pirate-radio-admins",
+    sessionLifetimeHours: Number(env.PIRATE_RADIO_SESSION_HOURS ?? 24),
   };
+}
+
+export function validateIdentityConfig(config: PirateRadioConfig): void {
+  const missing = [
+    ["DATABASE_URL", config.databaseUrl],
+    ["PIRATE_RADIO_OIDC_ISSUER", config.oidcIssuer],
+    ["PIRATE_RADIO_OIDC_CLIENT_ID", config.oidcClientId],
+    ["PIRATE_RADIO_OIDC_CLIENT_SECRET", config.oidcClientSecret],
+  ].filter(([, value]) => !value).map(([name]) => name);
+  if (missing.length > 0) {
+    throw new Error(`Missing required identity configuration: ${missing.join(", ")}`);
+  }
+  if (!Number.isFinite(config.sessionLifetimeHours) || config.sessionLifetimeHours <= 0) {
+    throw new Error("PIRATE_RADIO_SESSION_HOURS must be a positive number.");
+  }
 }
 
 function parseFeeds(value: string | undefined): ArticleFeedConfig[] | undefined {

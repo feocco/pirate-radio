@@ -7,14 +7,34 @@ const pirateRadioOpenApi = {
       "Browser pages and JSON endpoints exposed by the Pirate Radio service for library playback, queue conversion, and health checks.",
   },
   servers: [{ url: "/" }],
+  security: [{ cookieAuth: [] }],
+  components: {
+    securitySchemes: {
+      cookieAuth: { type: "apiKey", in: "cookie", name: "pirate_radio_session" },
+    },
+    schemas: {
+      AuthenticationError: {
+        type: "object",
+        properties: { error: { type: "string", const: "authentication_required" } },
+        required: ["error"],
+      },
+      AuthorizationError: {
+        type: "object",
+        properties: { error: { type: "string", const: "admin_required" } },
+        required: ["error"],
+      },
+    },
+  },
   tags: [
     { name: "service", description: "Operational and discovery endpoints." },
     { name: "library", description: "Library pages, media, and playback state." },
     { name: "queue", description: "Recent-feed queue views and conversion actions." },
+    { name: "identity", description: "OIDC login and application session endpoints." },
   ],
   paths: {
     "/health": {
       get: {
+        security: [],
         tags: ["service"],
         summary: "Service health check",
         responses: {
@@ -34,6 +54,40 @@ const pirateRadioOpenApi = {
             },
           },
         },
+      },
+    },
+    "/auth/login": {
+      get: {
+        security: [],
+        tags: ["identity"],
+        summary: "Start authorization-code OIDC login with PKCE",
+        responses: { "302": { description: "Redirect to Authentik." } },
+      },
+    },
+    "/auth/callback": {
+      get: {
+        security: [],
+        tags: ["identity"],
+        summary: "Consume a one-time OIDC callback",
+        responses: {
+          "302": { description: "Session created and redirected to the requested local page." },
+          "400": { description: "Expired, replayed, or invalid callback." },
+          "403": { description: "The identity lacks pirate-radio-users membership." },
+        },
+      },
+    },
+    "/auth/me": {
+      get: {
+        tags: ["identity"],
+        summary: "Current application identity and role snapshot",
+        responses: { "200": { description: "Current authenticated user." }, "401": { description: "No valid session." } },
+      },
+    },
+    "/auth/logout": {
+      post: {
+        tags: ["identity"],
+        summary: "Revoke the current opaque session",
+        responses: { "204": { description: "Session revoked." }, "403": { description: "Origin did not match the public service URL." } },
       },
     },
     "/docs": {
@@ -97,6 +151,7 @@ const pirateRadioOpenApi = {
             description: "HTML admin page with service quick links.",
             content: { "text/html": { schema: { type: "string" } } },
           },
+          "403": { description: "Authenticated member is not in pirate-radio-admins." },
         },
       },
     },
@@ -175,6 +230,7 @@ const pirateRadioOpenApi = {
                     positionSeconds: { type: "number" },
                     durationSeconds: { type: "number" },
                     updatedAt: { type: "string", format: "date-time" },
+                    completedAt: { type: "string", format: "date-time" },
                   },
                   required: ["slug", "positionSeconds", "updatedAt"],
                 },
@@ -215,6 +271,7 @@ const pirateRadioOpenApi = {
                 properties: {
                   positionSeconds: { type: "number" },
                   durationSeconds: { type: "number" },
+                  ended: { type: "boolean", description: "Browser emitted the ended event." },
                 },
                 required: ["positionSeconds"],
               },
@@ -233,6 +290,7 @@ const pirateRadioOpenApi = {
                     positionSeconds: { type: "number" },
                     durationSeconds: { type: "number" },
                     updatedAt: { type: "string", format: "date-time" },
+                    completedAt: { type: "string", format: "date-time" },
                   },
                   required: ["slug", "positionSeconds", "updatedAt"],
                 },
@@ -290,6 +348,19 @@ const pirateRadioOpenApi = {
               },
             },
           },
+        },
+      },
+    },
+    "/submissions.json": {
+      get: {
+        tags: ["queue"],
+        summary: "Recent global submission history with attribution and status",
+        responses: {
+          "200": {
+            description: "Authenticated submission history.",
+            content: { "application/json": { schema: { type: "object", properties: { version: { type: "integer" }, items: { type: "array", items: { type: "object" } } }, required: ["version", "items"] } } },
+          },
+          "401": { description: "No valid application session." },
         },
       },
     },
