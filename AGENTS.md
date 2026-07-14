@@ -39,6 +39,9 @@ registration separately.
   submission snapshots. Application identity is `(issuer, subject)`, coarse
   access comes from Authentik group snapshots, and row ownership uses the
   internal application-user id.
+- Keep profile editing in Authentik. The repo-local account menu links to the
+  central profile and logout must revoke both the Pirate Radio session and the
+  active Authentik browser session; cover both behaviors in focused tests.
 - `/health`, `/auth/login`, and `/auth/callback` are the only unauthenticated
   routes. Keep MP3 ranges, images, alignment, manifests, docs, and article text
   behind the same opaque application session.
