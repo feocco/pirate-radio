@@ -86,8 +86,8 @@ const pirateRadioOpenApi = {
     "/auth/logout": {
       post: {
         tags: ["identity"],
-        summary: "Revoke the current opaque session",
-        responses: { "204": { description: "Session revoked." }, "403": { description: "Origin did not match the public service URL." } },
+        summary: "Revoke the opaque session and continue through provider logout",
+        responses: { "303": { description: "Session revoked; redirect to Authentik end-session." }, "403": { description: "Origin did not match the public service URL." } },
       },
     },
     "/docs": {

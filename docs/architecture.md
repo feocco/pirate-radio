@@ -79,6 +79,11 @@ application user ids own progress and submissions, so email or username changes
 cannot move rows. The user snapshot remains after an IdP account disappears so
 historical attribution remains readable.
 
+The header's repo-local account menu shows the current username and links to
+Authentik's central profile editor. Logout revokes the Pirate Radio session and
+continues through the provider's end-session endpoint; Pirate Radio does not
+duplicate identity settings UI.
+
 Postgres owns users, hashed sessions, one-time OIDC transactions, per-user
 progress/completion, submissions, and migration receipts. One shared filesystem
 library still owns MP3, story JSON/text, images, alignment, `index.json`, and

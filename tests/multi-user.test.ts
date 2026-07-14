@@ -33,6 +33,18 @@ async function testServer(principal = { user: memberUser, isAdmin: false }) {
 }
 
 describe("multi-user authorization and progress", () => {
+  test("revokes the application session and redirects through OIDC logout", async () => {
+    const runtime = await testServer();
+    const response = await fetch(`${runtime.baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: { origin: runtime.config.publicBaseUrl },
+      redirect: "manual",
+    });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toContain("/end-session/");
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
   test("ignores spoofed identity headers and protects media", async () => {
     const runtime = await testServer();
     runtime.authenticator.principal = undefined;

@@ -26,6 +26,7 @@ const config: PirateRadioConfig = {
 
 class TestProtocol implements OidcProtocol {
   parameters?: Record<string, string>;
+  endSessionParameters?: Record<string, string>;
   checks?: { codeVerifier: string; state: string; nonce: string };
   claims: Record<string, unknown> = {
     iss: config.oidcIssuer,
@@ -39,6 +40,10 @@ class TestProtocol implements OidcProtocol {
   authorizationUrl(parameters: Record<string, string>): string {
     this.parameters = parameters;
     return `https://auth.example/authorize?state=${parameters.state}`;
+  }
+  endSessionUrl(parameters: Record<string, string>): string {
+    this.endSessionParameters = parameters;
+    return "https://auth.example/end-session";
   }
   async exchange(_url: URL, checks: { codeVerifier: string; state: string; nonce: string }): Promise<Record<string, unknown>> {
     this.checks = checks;
@@ -112,7 +117,10 @@ describe("OIDC application sessions", () => {
     const rawToken = cookiePair.split("=")[1];
     expect(store.sessions.has(rawToken)).toBe(false);
     expect((await auth.authenticate(cookiePair))?.user.username).toBe("friend");
-    await auth.logout(cookiePair);
+    const logout = await auth.logout(cookiePair);
+    expect(logout.sessionCookie).toContain("Max-Age=0");
+    expect(logout.location).toBe("https://auth.example/end-session");
+    expect(protocol.endSessionParameters).toEqual({});
     expect(await auth.authenticate(cookiePair)).toBeUndefined();
   });
 

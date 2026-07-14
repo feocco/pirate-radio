@@ -40,6 +40,10 @@ Authorization code uses PKCE, nonce, a browser-bound one-time state record, and
 a ten-minute callback lifetime. Session tokens contain 256 random bits; only
 SHA-256 hashes are stored. Cookies are host-only, `Secure`, `HttpOnly`,
 `SameSite=Lax`, fixed at 24 hours, and revoked on logout.
+Logout then redirects through the provider's OIDC end-session endpoint. The
+Pirate Radio Authentik provider uses an invalidation flow with a User Logout
+stage, so this also ends the active Authentik browser session instead of
+silently signing the user back in.
 
 Every state-changing route requires an `Origin` exactly matching
 `PIRATE_RADIO_PUBLIC_URL`. Authentik groups provide coarse member/admin access;

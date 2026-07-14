@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AuthenticatedRequest, Authenticator, CallbackResult } from "../../src/auth.js";
+import type { AuthenticatedRequest, Authenticator, CallbackResult, LogoutResult } from "../../src/auth.js";
 import type { CreateSubmissionInput, PirateRadioStore } from "../../src/database.js";
 import type { ApplicationUser, OidcIdentitySnapshot, OidcTransaction, PlaybackProgress, Submission, SubmissionStatus } from "../../src/identity.js";
 
@@ -35,8 +35,11 @@ export class FakeAuthenticator implements Authenticator {
   async authenticate(): Promise<AuthenticatedRequest | undefined> {
     return this.principal;
   }
-  async logout(): Promise<string> {
-    return "pirate_radio_session=; Max-Age=0";
+  async logout(): Promise<LogoutResult> {
+    return {
+      sessionCookie: "pirate_radio_session=; Max-Age=0",
+      location: "https://auth.example/application/o/pirate-radio/end-session/",
+    };
   }
 }
 

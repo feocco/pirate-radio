@@ -21,6 +21,7 @@ export interface PirateRadioConfig {
   oidcClientId?: string;
   oidcClientSecret?: string;
   oidcScopes: string;
+  identitySettingsUrl?: string;
   memberGroup: string;
   adminGroup: string;
   sessionLifetimeHours: number;
@@ -55,10 +56,16 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): PirateRadio
     oidcClientId: env.PIRATE_RADIO_OIDC_CLIENT_ID,
     oidcClientSecret: env.PIRATE_RADIO_OIDC_CLIENT_SECRET,
     oidcScopes: env.PIRATE_RADIO_OIDC_SCOPES ?? "openid profile email groups",
+    identitySettingsUrl: env.PIRATE_RADIO_IDENTITY_SETTINGS_URL ?? identitySettingsUrl(env.PIRATE_RADIO_OIDC_ISSUER),
     memberGroup: env.PIRATE_RADIO_MEMBER_GROUP ?? "pirate-radio-users",
     adminGroup: env.PIRATE_RADIO_ADMIN_GROUP ?? "pirate-radio-admins",
     sessionLifetimeHours: Number(env.PIRATE_RADIO_SESSION_HOURS ?? 24),
   };
+}
+
+function identitySettingsUrl(issuer: string | undefined): string | undefined {
+  if (!issuer) return undefined;
+  return `${new URL(issuer).origin}/if/user/#/settings`;
 }
 
 export function validateIdentityConfig(config: PirateRadioConfig): void {

@@ -20,6 +20,7 @@ The app reads configuration from environment variables.
 | `PIRATE_RADIO_OIDC_CLIENT_ID` | none | Required OIDC client id. |
 | `PIRATE_RADIO_OIDC_CLIENT_SECRET` | none | Required OIDC client secret. |
 | `PIRATE_RADIO_OIDC_SCOPES` | `openid profile email groups` | OIDC scopes requested at login. |
+| `PIRATE_RADIO_IDENTITY_SETTINGS_URL` | Authentik issuer origin plus `/if/user/#/settings` | Central profile page linked from the account menu. |
 | `PIRATE_RADIO_MEMBER_GROUP` | `pirate-radio-users` | Group required for all protected routes. |
 | `PIRATE_RADIO_ADMIN_GROUP` | `pirate-radio-admins` | Group required for admin and maintenance routes. |
 | `PIRATE_RADIO_SESSION_HOURS` | `24` | Fixed, non-rolling opaque session lifetime. |

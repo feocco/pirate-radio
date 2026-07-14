@@ -18,6 +18,17 @@ const sharedCss = `
   .brandbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 28px; background: var(--accent); border-bottom: 1px solid var(--line); font-weight: 900; }
   .brandlink { display: flex; align-items: center; gap: 16px; font-size: 24px; text-decoration: none; }
   .mark { font-size: 42px; letter-spacing: -2px; line-height: .8; }
+  .account-menu { position: relative; }
+  .account-menu summary { display: flex; align-items: center; gap: 9px; list-style: none; padding: 6px 10px 6px 7px; border: 1px solid rgba(0, 0, 0, .5); border-radius: 999px; background: rgba(255, 255, 255, .28); cursor: pointer; font-weight: 900; }
+  .account-menu summary::-webkit-details-marker { display: none; }
+  .account-menu summary:hover, .account-menu summary:focus-visible { background: rgba(255, 255, 255, .48); outline: none; }
+  .account-avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #000; color: #fff; font-size: 14px; }
+  .account-chevron { width: 8px; height: 8px; margin: -4px 2px 0 3px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform .15s ease; }
+  .account-menu[open] .account-chevron { margin-top: 4px; transform: rotate(225deg); }
+  .account-popover { position: absolute; z-index: 10; top: calc(100% + 8px); right: 0; min-width: 190px; padding: 6px; border: 1px solid var(--line); background: #fff; box-shadow: 4px 4px 0 rgba(0, 0, 0, .24); }
+  .account-action { display: block; width: 100%; padding: 10px 12px; border: 0; background: transparent; color: var(--ink); text-align: left; text-decoration: none; font: inherit; font-weight: 900; cursor: pointer; }
+  .account-action:hover, .account-action:focus-visible { background: #e6e6e6; outline: none; }
+  .account-logout { margin: 0; }
   .topbar { display: flex; border-bottom: 1px solid var(--line); background: #000; color: #fff; }
   .navlink { display: block; min-width: 180px; padding: 12px 18px; border-right: 1px solid #666; font-weight: 900; text-decoration: none; }
   .navlink.active { color: var(--accent); }
@@ -92,7 +103,7 @@ const sharedCss = `
   }
 `;
 
-export function renderReaderHtml(user?: ApplicationUser): string {
+export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -102,7 +113,7 @@ export function renderReaderHtml(user?: ApplicationUser): string {
   <style>${sharedCss}</style>
 </head>
 <body>
-  ${renderChrome("library", user)}
+  ${renderChrome("library", user, identitySettingsUrl)}
   <section class="hero wrap">
     <div class="kicker">Audio dispatches</div>
     <h1>Pirate Radio</h1>
@@ -305,7 +316,7 @@ export function renderReaderHtml(user?: ApplicationUser): string {
 </html>`;
 }
 
-export function renderBacklogHtml(user?: ApplicationUser): string {
+export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -315,7 +326,7 @@ export function renderBacklogHtml(user?: ApplicationUser): string {
   <style>${sharedCss}</style>
 </head>
 <body>
-  ${renderChrome("backlog", user)}
+  ${renderChrome("backlog", user, identitySettingsUrl)}
   <section class="hero wrap">
     <div class="kicker">Audio queue</div>
     <h1>Queue</h1>
@@ -570,7 +581,7 @@ export function renderBacklogHtml(user?: ApplicationUser): string {
 export function renderArticleHtml(
   story: Story,
   item: LibraryItem,
-  identity: { user?: ApplicationUser; completedUsers?: ApplicationUser[]; submittedBy?: ApplicationUser } = {},
+  identity: { user?: ApplicationUser; completedUsers?: ApplicationUser[]; submittedBy?: ApplicationUser; identitySettingsUrl?: string } = {},
 ): string {
   const blocks = story.contentBlocks?.length
     ? story.contentBlocks
@@ -584,7 +595,7 @@ export function renderArticleHtml(
   <style>${sharedCss}</style>
 </head>
 <body>
-  ${renderChrome("library", identity.user)}
+  ${renderChrome("library", identity.user, identity.identitySettingsUrl)}
   <article class="article-shell">
     <header class="article-hero">
       <div class="kicker">${escapeHtml(item.sourceName ?? "Pirate Radio")}</div>
@@ -669,7 +680,7 @@ export function renderArticleHtml(
 </html>`;
 }
 
-export function renderAdminHtml(user?: ApplicationUser): string {
+export function renderAdminHtml(user?: ApplicationUser, identitySettingsUrl?: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -679,7 +690,7 @@ export function renderAdminHtml(user?: ApplicationUser): string {
   <style>${sharedCss}</style>
 </head>
 <body>
-  ${renderChrome("admin", user)}
+  ${renderChrome("admin", user, identitySettingsUrl)}
   <section class="hero wrap">
     <div class="kicker">Service status</div>
     <h1>Admin</h1>
@@ -712,19 +723,32 @@ export function renderAdminHtml(user?: ApplicationUser): string {
 
 type ActivePage = "library" | "backlog" | "admin";
 
-function renderChrome(activePage: ActivePage, user?: ApplicationUser): string {
+function renderChrome(activePage: ActivePage, user?: ApplicationUser, identitySettingsUrl?: string): string {
   const brandClass = activePage === "library" ? "brandlink active" : "brandlink";
   const items = [
     { page: "backlog", href: "/queue", label: "Queue" },
     ...(!user || user.groups.includes("pirate-radio-admins") ? [{ page: "admin" as const, href: "/admin", label: "Admin" }] : []),
   ] as const;
-  return `<div class="brandbar"><a class="${brandClass}" href="/" aria-label="Pirate Radio home"><span class="mark">PW</span><span>Pirate Radio</span></a><div>${user ? `${escapeHtml(user.username)} <button class="button" id="logout" type="button">Log out</button>` : "AI-generated audio"}</div></div>
+  const account = user ? `<details class="account-menu" id="account-menu">
+    <summary aria-label="Account menu for ${escapeAttribute(user.username)}"><span class="account-avatar" aria-hidden="true">${escapeHtml(user.username.slice(0, 1).toUpperCase())}</span><span>${escapeHtml(user.username)}</span><span class="account-chevron" aria-hidden="true"></span></summary>
+    <div class="account-popover" role="menu">
+      ${identitySettingsUrl ? `<a class="account-action" role="menuitem" href="${escapeAttribute(identitySettingsUrl)}">Edit profile</a>` : ""}
+      <form class="account-logout" method="post" action="/auth/logout"><button class="account-action" role="menuitem" type="submit">Log out</button></form>
+    </div>
+  </details>` : "AI-generated audio";
+  const accountScript = user ? `<script>
+    const accountMenu = document.getElementById("account-menu");
+    document.addEventListener("click", (event) => {
+      if (accountMenu.open && !accountMenu.contains(event.target)) accountMenu.open = false;
+    });
+  </script>` : "";
+  return `<div class="brandbar"><a class="${brandClass}" href="/" aria-label="Pirate Radio home"><span class="mark">PW</span><span>Pirate Radio</span></a>${account}</div>
   <nav class="topbar" aria-label="Primary">${items
     .map(
       (item) =>
         `<a class="navlink ${item.page === activePage ? "active" : ""}" href="${item.href}">${item.label}</a>`,
     )
-    .join("")}</nav>${user ? `<script>document.getElementById("logout").addEventListener("click", async () => { await fetch("/auth/logout", { method: "POST" }); location.href = "/auth/login"; });</script>` : ""}`;
+    .join("")}</nav>${accountScript}`;
 }
 
 function renderBlock(block: StoryContentBlock): string {
