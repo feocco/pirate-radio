@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { ForbiddenIdentityError, OIDC_COOKIE, OidcAuthenticator, parseCookies, type OidcProtocol } from "../src/auth.js";
+import { ForbiddenIdentityError, OIDC_COOKIE, OidcAuthenticator, identityFromClaims, parseCookies, type OidcProtocol } from "../src/auth.js";
 import type { PirateRadioConfig } from "../src/config.js";
 import { MemoryStore } from "./support/fakes.js";
 
@@ -47,6 +47,15 @@ class TestProtocol implements OidcProtocol {
 }
 
 describe("OIDC application sessions", () => {
+  test("normalizes duplicate group claims", () => {
+    expect(identityFromClaims({
+      iss: config.oidcIssuer,
+      sub: "subject-1",
+      email: "friend@example.com",
+      groups: ["pirate-radio-users", "pirate-radio-admins", "pirate-radio-users"],
+    }).groups).toEqual(["pirate-radio-users", "pirate-radio-admins"]);
+  });
+
   test("stores state, nonce, PKCE, binds the browser, and rejects callback replay", async () => {
     const store = new MemoryStore();
     const protocol = new TestProtocol();

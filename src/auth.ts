@@ -170,7 +170,7 @@ export function identityFromClaims(claims: Record<string, unknown>): OidcIdentit
   const email = stringClaim(claims.email, "email");
   const username = String(claims.preferred_username ?? claims.nickname ?? email.split("@")[0]);
   const displayName = String(claims.name ?? username);
-  const groups = Array.isArray(claims.groups) ? claims.groups.map(String) : [];
+  const groups = Array.isArray(claims.groups) ? [...new Set(claims.groups.map(String))] : [];
   return { issuer, subject, email, username, displayName, groups };
 }
 
