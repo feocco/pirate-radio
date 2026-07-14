@@ -43,7 +43,7 @@ class TestProtocol implements OidcProtocol {
   }
   endSessionUrl(parameters: Record<string, string>): string {
     this.endSessionParameters = parameters;
-    return `https://auth.example/end-session?post_logout_redirect_uri=${encodeURIComponent(parameters.post_logout_redirect_uri)}`;
+    return "https://auth.example/end-session";
   }
   async exchange(_url: URL, checks: { codeVerifier: string; state: string; nonce: string }): Promise<Record<string, unknown>> {
     this.checks = checks;
@@ -119,8 +119,8 @@ describe("OIDC application sessions", () => {
     expect((await auth.authenticate(cookiePair))?.user.username).toBe("friend");
     const logout = await auth.logout(cookiePair);
     expect(logout.sessionCookie).toContain("Max-Age=0");
-    expect(logout.location).toBe("https://auth.example/end-session?post_logout_redirect_uri=https%3A%2F%2Fpirate-radio.example.com%2F");
-    expect(protocol.endSessionParameters).toEqual({ post_logout_redirect_uri: "https://pirate-radio.example.com/" });
+    expect(logout.location).toBe("https://auth.example/end-session");
+    expect(protocol.endSessionParameters).toEqual({});
     expect(await auth.authenticate(cookiePair)).toBeUndefined();
   });
 

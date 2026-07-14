@@ -38,7 +38,7 @@ export class FakeAuthenticator implements Authenticator {
   async logout(): Promise<LogoutResult> {
     return {
       sessionCookie: "pirate_radio_session=; Max-Age=0",
-      location: "https://auth.example/application/o/pirate-radio/end-session/?post_logout_redirect_uri=https%3A%2F%2Fpirate-radio.example.com%2F",
+      location: "https://auth.example/application/o/pirate-radio/end-session/",
     };
   }
 }

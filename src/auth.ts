@@ -157,9 +157,7 @@ export class OidcAuthenticator implements Authenticator {
     if (token) await this.store.revokeSession(hashToken(token));
     return {
       sessionCookie: clearCookie(SESSION_COOKIE),
-      location: this.protocol.endSessionUrl({
-        post_logout_redirect_uri: `${this.baseUrl()}/`,
-      }),
+      location: this.protocol.endSessionUrl({}),
     };
   }
 

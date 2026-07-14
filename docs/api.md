@@ -10,7 +10,7 @@ small browser view. Except for `GET /health`, `GET /auth/login`, and
 - `GET /auth/callback` consumes the one-time browser-bound transaction.
 - `GET /auth/me` returns the current application-user and role snapshot.
 - `POST /auth/logout` revokes the session, clears the cookie, and redirects
-  through Authentik's OIDC end-session endpoint before returning home.
+  through Authentik's OIDC end-session endpoint to end the SSO session.
 
 Unauthenticated calls return `401 authentication_required`. `/admin` and
 `/simulate/*` return `403 admin_required` for authenticated non-admin members.
