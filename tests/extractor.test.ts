@@ -9,6 +9,7 @@ describe("extractStoryFromHtml", () => {
     const story = extractStoryFromHtml(html, "https://www.piratewires.com/p/test-story");
 
     expect(story.title).toBe("The Test Story");
+    expect(story.author).toBe("Pirate Staff");
     expect(story.text).toBe(
       [
         "Enter: The Test Section",
@@ -46,6 +47,7 @@ describe("extractStoryFromHtml", () => {
     const story = extractStoryFromHtml(html, "https://www.hyperdimensional.co/p/what-should-be-done");
 
     expect(story.title).toBe("What Should Be Done");
+    expect(story.author).toBe("Dean W. Ball");
     expect(story.tagline).toBe("How to get past improvised model licensing");
     expect(story.heroImageOriginalUrl).toBe("https://substackcdn.com/image/fetch/hero.png");
     expect(story.sectionTitles).toEqual(["On the Current State of Affairs", "What Should Be Done"]);

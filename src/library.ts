@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 export interface LibraryItem {
   slug: string;
   title: string;
+  author?: string;
   sourceUrl: string;
   sourceType?: string;
   sourceName?: string;

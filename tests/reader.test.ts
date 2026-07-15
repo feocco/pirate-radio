@@ -26,6 +26,7 @@ describe("reader page", () => {
     expect(html).toContain("Newest conversion");
     expect(html).toContain("Article date");
     expect(html).toContain("item.imageUrl");
+    expect(html).toContain('item.author ? "By " + item.author : ""');
     expect(html).toContain('"/article/" + encodeURIComponent(item.slug)');
     expect(html).toContain("downloadLink.download = item.slug + \".mp3\"");
     expect(html).toContain("Read");
@@ -77,6 +78,7 @@ describe("reader page", () => {
     const story: Story = {
       sourceUrl: "https://www.hyperdimensional.co/p/what-should-be-done",
       title: "What Should Be Done",
+      author: "Dean W. Ball",
       tagline: "How to get past improvised model licensing",
       text: "Body paragraph.",
       wordCount: 2,
@@ -86,6 +88,7 @@ describe("reader page", () => {
     const item: LibraryItem = {
       slug: "what-should-be-done",
       title: story.title,
+      author: story.author,
       sourceUrl: story.sourceUrl,
       sourceType: "substack",
       sourceName: "Hyperdimensional",
@@ -105,6 +108,7 @@ describe("reader page", () => {
     const html = renderArticleHtml(story, item);
 
     expect(html).toContain("Hyperdimensional");
+    expect(html).toContain("By Dean W. Ball");
   });
 
   test("renders an admin page with the admin nav tab active", () => {

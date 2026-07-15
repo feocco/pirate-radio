@@ -83,6 +83,7 @@ describe("approval workflow", () => {
 
     expect(result.status).toBe("accepted");
     expect(result.libraryItem?.audioUrl).toBe("/audio/inside-microns-attempts.mp3");
+    expect(result.libraryItem?.author).toBe("Ryan Hassan");
     expect(state.approved[article.id]).toBeDefined();
   });
 
@@ -197,6 +198,7 @@ describe("approval workflow", () => {
     expect(result.libraryItem).toBeDefined();
     expect(result.libraryItem!.audioPath).toBe(audioPath);
     expect(result.libraryItem!.tagline).toBe("Updated tagline.");
+    expect(result.libraryItem!.author).toBe("Ryan Hassan");
     expect(result.libraryItem!.imageUrl).toBe("/images/inside-microns-attempts.png");
   });
 

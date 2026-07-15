@@ -30,7 +30,9 @@ later backward seeks.
 `GET /library.json`, `/article/<slug>`, `/audio/*`, `/images/*`, and
 `/alignment/*` expose the shared library to authenticated members. Article HTML
 adds the first successful human submitter and the current usernames of every
-completed user. Existing/automated items have no human attribution.
+completed user. Library items include an optional `author`; the UI displays it
+when known and omits the byline otherwise. Existing/automated items have no
+human submission attribution.
 
 `GET /submissions.json` returns global recent feed, URL, and custom-text
 submissions with status and a preserved username snapshot. The queue page uses

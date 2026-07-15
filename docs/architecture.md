@@ -14,8 +14,9 @@ pasted article URLs, and custom pasted text.
    WebSocket.
 5. On article approval, extract Pirate Wires through the saved Playwright
    profile, fetch public Substack HTML directly, or retrieve an X Article's
-   structured `article` field through the official Post lookup API. Custom text
-   entries skip extraction and create a story object directly from title/body.
+   structured `article` field and expanded author account through the official
+   Post lookup API. Custom text entries skip extraction and create a story
+   object directly from title/body.
 6. Cache article art locally when available, synthesize MP3 audio through the
    selected TTS provider, and optionally write word-timing alignment JSON.
 7. Write story JSON, text, MP3, cached image, and a library manifest.
@@ -64,8 +65,10 @@ The queue page also accepts pasted Pirate Wires, Hyperdimensional, and Substack
 `/p/...` article URLs plus X `/<username>/status/<id>` Article URLs.
 `POST /queue/convert-url` validates known article URL patterns, records a
 minimal pending article, and starts the same background conversion workflow.
-X extraction uses `GET /2/tweets/<id>?tweet.fields=article` with an app-only
-bearer token; it does not depend on X page markup or a browser session.
+X extraction uses `GET /2/tweets/<id>?tweet.fields=article,author_id` with an
+app-only bearer token; the expanded X account display name becomes the author,
+with the handle as a fallback. It does not depend on X page markup or a browser
+session.
 Completion/failure still comes through the normal phone notifications.
 `/backlog` routes remain compatibility aliases.
 
@@ -92,6 +95,9 @@ Postgres owns users, hashed sessions, one-time OIDC transactions, per-user
 progress/completion, submissions, and migration receipts. One shared filesystem
 library still owns MP3, story JSON/text, images, alignment, `index.json`, and
 RSS `state.json`. `progress.json` is retained only as migration/rollback input.
+Story JSON and `index.json` preserve an optional article author. Feed metadata
+backs RSS conversions; pasted HTML uses page author metadata; missing authors
+remain absent rather than displaying an unknown placeholder.
 
 The browser may fall back to user-keyed `localStorage` if a progress read fails,
 but normal cross-device state is `GET/PUT /progress/<slug>` in Postgres.

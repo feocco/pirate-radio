@@ -56,6 +56,7 @@ export function extractStoryFromHtml(html: string, sourceUrl: string): Story {
   return {
     sourceUrl,
     title,
+    author: extractAuthor(html),
     tagline: extractTagline(html),
     heroImageOriginalUrl: extractHeroImageUrl(html, sourceUrl),
     sectionTitles,
@@ -65,6 +66,28 @@ export function extractStoryFromHtml(html: string, sourceUrl: string): Story {
     characterCount: text.length,
     extractedAt: new Date().toISOString(),
   };
+}
+
+function extractAuthor(html: string): string | undefined {
+  const metadataAuthor =
+    metaContent(html, "name", "author") ??
+    metaContent(html, "property", "author") ??
+    metaContent(html, "property", "article:author");
+  if (metadataAuthor) {
+    const author = cleanAuthor(metadataAuthor);
+    if (author) {
+      return author;
+    }
+  }
+  return Array.from(
+    html.matchAll(/<[^>]+\bclass=["'][^"']*(?:author|byline)[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi),
+    (match) => cleanAuthor(match[1] ?? ""),
+  ).find((author): author is string => Boolean(author));
+}
+
+function cleanAuthor(value: string): string | undefined {
+  const author = cleanText(value).replace(/^by\s+/i, "").trim();
+  return author && !/^https?:\/\//i.test(author) ? author : undefined;
 }
 
 function blockType(tagName: string): StoryContentBlockType {

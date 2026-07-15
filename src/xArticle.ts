@@ -12,6 +12,7 @@ const X_HOSTNAMES = new Set([
 
 interface XArticlePayload {
   data?: {
+    author_id?: string;
     article?: {
       cover_media?: string;
       plain_text?: string;
@@ -24,6 +25,11 @@ interface XArticlePayload {
       media_key?: string;
       preview_image_url?: string;
       url?: string;
+    }>;
+    users?: Array<{
+      id?: string;
+      name?: string;
+      username?: string;
     }>;
   };
 }
@@ -75,9 +81,10 @@ export async function extractXArticleFromUrl(
   }
 
   const endpoint = new URL(`/2/tweets/${parsedUrl.postId}`, X_API_BASE_URL);
-  endpoint.searchParams.set("tweet.fields", "article");
-  endpoint.searchParams.set("expansions", "article.cover_media");
+  endpoint.searchParams.set("tweet.fields", "article,author_id");
+  endpoint.searchParams.set("expansions", "article.cover_media,author_id");
   endpoint.searchParams.set("media.fields", "url,preview_image_url");
+  endpoint.searchParams.set("user.fields", "name,username");
   const response = await (options.fetchImpl ?? fetch)(endpoint, {
     headers: {
       accept: "application/json",
@@ -117,10 +124,17 @@ export async function extractXArticleFromUrl(
   const cover = payload.includes?.media?.find(
     (media) => media.media_key === article.cover_media,
   );
+  const authorAccount = payload.includes?.users?.find(
+    (user) => user.id === payload.data?.author_id,
+  );
+  const author = authorAccount?.name?.trim() || (
+    authorAccount?.username?.trim() ? `@${authorAccount.username.trim()}` : undefined
+  );
 
   return {
     sourceUrl: parsedUrl.canonicalUrl,
     title,
+    author,
     tagline: article.preview_text?.trim() || undefined,
     heroImageOriginalUrl: cover?.url ?? cover?.preview_image_url,
     contentBlocks,

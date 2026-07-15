@@ -51,3 +51,5 @@ registration separately.
 - Set `PWR_HEADLESS=true` for Docker or other headless hosts.
 - X Articles must use the official Post lookup API and `X_API_BEARER_TOKEN`;
   do not add an X browser-scraping fallback.
+- Preserve optional article authors from extraction/feed metadata into both
+  story JSON and `index.json`; omit missing bylines instead of inventing one.

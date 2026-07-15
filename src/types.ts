@@ -1,6 +1,7 @@
 export interface Story {
   sourceUrl: string;
   title: string;
+  author?: string;
   tagline?: string;
   heroImageOriginalUrl?: string;
   heroImagePath?: string;

@@ -28,6 +28,7 @@ describe("X Article extraction", () => {
       requestedInit = init;
       return new Response(JSON.stringify({
         data: {
+          author_id: "112321452",
           article: {
             cover_media: "3_2076946366647971840",
             plain_text: `${FIRST_SENTENCE}\n\nA middle paragraph.\n\n${LAST_SENTENCE}`,
@@ -40,6 +41,11 @@ describe("X Article extraction", () => {
             media_key: "3_2076946366647971840",
             type: "photo",
             url: "https://pbs.twimg.com/media/HNLLt2GXMAAAPF0.jpg",
+          }],
+          users: [{
+            id: "112321452",
+            name: "Demis Hassabis",
+            username: "demishassabis",
           }],
         },
       }), { status: 200 });
@@ -54,6 +60,7 @@ describe("X Article extraction", () => {
     expect(story).toMatchObject({
       sourceUrl: ARTICLE_URL,
       title: TITLE,
+      author: "Demis Hassabis",
       tagline: FIRST_SENTENCE,
       heroImageOriginalUrl: "https://pbs.twimg.com/media/HNLLt2GXMAAAPF0.jpg",
       contentBlocks: [
@@ -70,7 +77,26 @@ describe("X Article extraction", () => {
 
     expect(requestedUrl).toContain("/2/tweets/2076957440109625718");
     expect(requestedUrl).toContain("tweet.fields=article");
+    expect(requestedUrl).toContain("author_id");
+    expect(requestedUrl).toContain("user.fields=name%2Cusername");
     expect(new Headers(requestedInit?.headers).get("authorization")).toBe("Bearer test-bearer-token");
+  });
+
+  test("falls back to the X handle when the display name is absent", async () => {
+    const story = await extractXArticleFromUrl(ARTICLE_URL, {
+      bearerToken: "test-bearer-token",
+      fetchImpl: async () => new Response(JSON.stringify({
+        data: {
+          author_id: "112321452",
+          article: { title: TITLE, plain_text: FIRST_SENTENCE },
+        },
+        includes: {
+          users: [{ id: "112321452", username: "demishassabis" }],
+        },
+      }), { status: 200 }),
+    });
+
+    expect(story.author).toBe("@demishassabis");
   });
 
   test("requires the bearer token", async () => {

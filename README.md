@@ -36,7 +36,8 @@ Outputs:
 - `output/json/<slug>.json`
 
 The extractor keeps the story focused while preserving reader metadata: title,
-tagline, body blocks, best-effort section titles, and the article hero image URL.
+optional author, tagline, body blocks, best-effort section titles, and the
+article hero image URL.
 X Articles use the official X Post lookup API and require
 `X_API_BEARER_TOKEN`; the public X page is not scraped.
 
@@ -118,7 +119,8 @@ after login.
 The reader serves:
 
 - `/` for the audio library with cached article art, source filtering, and
-  conversion-time sorting by default.
+  conversion-time sorting by default. Cards show the source and optional
+  article author.
 - `/docs` for a browser-friendly summary of the service HTTP contract and
   `/openapi.json` for the OpenAPI 3.1 document.
 - `/queue` for recent RSS articles that have not been converted yet, with

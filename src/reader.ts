@@ -265,7 +265,7 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
       heading.textContent = item.title;
       const meta = document.createElement("div");
       meta.className = "meta";
-      meta.textContent = [sourceName(item), item.publishedAt, item.wordCount ? item.wordCount + " words" : ""].filter(Boolean).join(" - ");
+      meta.textContent = [sourceName(item), item.author ? "By " + item.author : "", item.publishedAt, item.wordCount ? item.wordCount + " words" : ""].filter(Boolean).join(" - ");
       const tagline = document.createElement("p");
       tagline.className = "tagline";
       tagline.textContent = text(item.tagline);
@@ -603,7 +603,7 @@ export function renderArticleHtml(
       ${story.tagline ? `<p class="deck">${escapeHtml(story.tagline)}</p>` : ""}
     </header>
     <div class="article-meta">
-      <div>${escapeHtml(item.publishedAt || "Generated article")}</div>
+      <div>${escapeHtml([item.author ? `By ${item.author}` : "", item.publishedAt || "Generated article"].filter(Boolean).join(" - "))}</div>
       <div>${item.wordCount} words</div>
     </div>
     <div class="article-meta">

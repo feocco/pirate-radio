@@ -91,6 +91,7 @@ export async function handleArticleDecision(
   delete input.state.skipped[article.id];
 
   const story = await input.readArticle(article.url);
+  story.author = normalizedAuthor(story.author) ?? normalizedAuthor(article.author);
   const slug = storySlug(story);
   const textDir = join(input.libraryDir, "text");
   const storyDir = join(input.libraryDir, "stories");
@@ -123,6 +124,7 @@ export async function handleArticleDecision(
   const manifest = await appendLibraryItem(input.libraryDir, {
     slug,
     title: story.title,
+    author: story.author,
     sourceUrl: story.sourceUrl,
     sourceType: article.sourceType,
     sourceName: article.sourceName,
@@ -238,6 +240,7 @@ export async function refreshLibraryArticle(
   }
 
   const story = await input.readArticle(item.sourceUrl);
+  story.author = normalizedAuthor(story.author) ?? normalizedAuthor(item.author);
   const slug = storySlug(story);
   const cachedImage = await (input.cacheImage ?? cacheStoryImage)({
     libraryDir: input.libraryDir,
@@ -276,6 +279,7 @@ export async function refreshLibraryArticle(
   const nextManifest = await appendLibraryItem(input.libraryDir, {
     slug: item.slug,
     title: story.title,
+    author: story.author,
     sourceUrl: story.sourceUrl,
     sourceType: item.sourceType,
     sourceName: item.sourceName,
@@ -301,6 +305,10 @@ export async function refreshLibraryArticle(
     status: "refreshed",
     libraryItem: nextManifest.items.find((candidate) => candidate.slug === item.slug),
   };
+}
+
+function normalizedAuthor(author: string | undefined): string | undefined {
+  return author?.trim() || undefined;
 }
 
 function findDecisionRecord(
