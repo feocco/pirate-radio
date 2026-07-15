@@ -2,12 +2,13 @@ import { cleanText } from "./extractor.js";
 import { filterVoiceExcludedArticles } from "./articleFilters.js";
 import { slugFromUrl } from "./slug.js";
 
-export type ArticleSourceType = "pirate-wires" | "substack";
+export type ArticleSourceType = "pirate-wires" | "substack" | "x";
+export type ArticleFeedSourceType = Exclude<ArticleSourceType, "x">;
 
 export interface ArticleFeedConfig {
   id: string;
   name: string;
-  type: ArticleSourceType;
+  type: ArticleFeedSourceType;
   url: string;
 }
 

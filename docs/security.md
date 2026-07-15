@@ -10,6 +10,7 @@ Do not commit real values for:
 - `HOMELAB_FUNCTIONS_TOKEN`
 - `DATABASE_URL`
 - `PIRATE_RADIO_OIDC_CLIENT_SECRET`
+- `X_API_BEARER_TOKEN`
 - Pirate Wires browser profile/session data
 
 `.env`, `.env.*`, `.playwright-profile/`, `output/`, `dist/`, and
@@ -19,6 +20,8 @@ Cached article images and alignment JSON are generated runtime artifacts and
 belong under the ignored library/output directory, not in git.
 When `PWR_PROFILE_DIR` points into `/data`, that profile directory contains
 logged-in browser session material and must stay in the ignored runtime volume.
+X Article extraction uses an app-only bearer token against `api.x.com`; it does
+not reuse a user's X account, cookies, or browser profile.
 
 ## Network Exposure
 

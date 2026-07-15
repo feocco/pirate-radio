@@ -35,3 +35,8 @@ completed user. Existing/automated items have no human attribution.
 `GET /submissions.json` returns global recent feed, URL, and custom-text
 submissions with status and a preserved username snapshot. The queue page uses
 this endpoint directly.
+
+`POST /queue/convert-url` accepts Pirate Wires and Substack `/p/...` URLs plus
+X `/<username>/status/<id>` URLs that contain an X Article. Ordinary X posts are
+rejected during extraction because they do not contain the structured Article
+payload.

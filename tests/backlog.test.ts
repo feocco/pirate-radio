@@ -223,13 +223,26 @@ describe("backlog", () => {
       sourceType: "substack",
       sourceName: "Hyperdimensional",
     });
+    await expect(
+      validateArticleUrl("https://twitter.com/demishassabis/status/2076957440109625718?s=20"),
+    ).resolves.toEqual({
+      ok: true,
+      url: "https://x.com/demishassabis/status/2076957440109625718",
+      slug: "2076957440109625718",
+      sourceType: "x",
+      sourceName: "X",
+    });
     await expect(validateArticleUrl("not a url")).resolves.toEqual({
       ok: false,
       error: "Enter a valid URL.",
     });
     await expect(validateArticleUrl("https://example.com/p/test-story")).resolves.toEqual({
       ok: false,
-      error: "Enter a supported article URL from Pirate Wires or Substack.",
+      error: "Enter a supported article URL from Pirate Wires, Substack, or X.",
+    });
+    await expect(validateArticleUrl("https://x.com/demishassabis")).resolves.toEqual({
+      ok: false,
+      error: "Enter an X post URL with a /username/status/id path.",
     });
     await expect(validateArticleUrl("https://www.piratewires.com/about")).resolves.toEqual({
       ok: false,
@@ -292,6 +305,33 @@ describe("backlog", () => {
     });
   });
 
+  test("queueing a pasted X Article URL records X source metadata", async () => {
+    const state = createInitialState();
+    const startConversion = vi.fn(async () => {});
+
+    const result = await queueBacklogUrlConversion({
+      url: "https://x.com/demishassabis/status/2076957440109625718?ref_src=twsrc",
+      manifest,
+      state,
+      statePath: "/tmp/state.json",
+      processingSlugs: new Set(),
+      writeState: vi.fn(async () => {}),
+      startConversion,
+    });
+
+    expect(result).toEqual({ ok: true, status: "queued", slug: "2076957440109625718" });
+    expect(state.pending["2076957440109625718"]).toMatchObject({
+      id: "https://x.com/demishassabis/status/2076957440109625718",
+      url: "https://x.com/demishassabis/status/2076957440109625718",
+      slug: "2076957440109625718",
+      sourceType: "x",
+      sourceName: "X",
+      title: "X Article",
+      description: "Queued from pasted X URL.",
+    });
+    expect(startConversion).toHaveBeenCalledWith("2076957440109625718");
+  });
+
   test("queueing an unsupported URL reports a validation error", async () => {
     const result = await queueBacklogUrlConversion({
       url: "https://example.com/p/direct-story",
@@ -306,7 +346,7 @@ describe("backlog", () => {
     expect(result).toEqual({
       ok: false,
       status: "invalid_url",
-      error: "Enter a supported article URL from Pirate Wires or Substack.",
+      error: "Enter a supported article URL from Pirate Wires, Substack, or X.",
     });
   });
 });

@@ -3,6 +3,7 @@ import { slugFromUrl } from "./slug.js";
 import type { ArticleSourceType, PirateArticle } from "./feed.js";
 import type { LibraryManifest } from "./library.js";
 import type { PirateRadioState } from "./state.js";
+import { isXHostname, parseXPostUrl } from "./xArticle.js";
 
 export interface BacklogItem {
   slug: string;
@@ -125,7 +126,7 @@ export async function queueBacklogUrlConversion(
 
   const article: PirateArticle = {
     id: validation.url,
-    title: titleFromSlug(validation.slug),
+    title: validation.sourceType === "x" ? "X Article" : titleFromSlug(validation.slug),
     url: validation.url,
     author: "",
     publishedAt: "",
@@ -176,6 +177,23 @@ export async function validateArticleUrl(
     url = new URL(resolved.url);
   }
 
+  if (isXHostname(url.hostname)) {
+    const xPost = parseXPostUrl(url);
+    if (!xPost) {
+      return {
+        ok: false,
+        error: "Enter an X post URL with a /username/status/id path.",
+      };
+    }
+    return {
+      ok: true,
+      url: xPost.canonicalUrl,
+      slug: xPost.postId,
+      sourceType: "x",
+      sourceName: "X",
+    };
+  }
+
   const parts = url.pathname.split("/").filter(Boolean);
   if (parts[0] !== "p" || !parts[1]) {
     return {
@@ -189,7 +207,7 @@ export async function validateArticleUrl(
   const slug = slugFromUrl(url.toString());
   const source = sourceForUrl(url);
   if (!source) {
-    return { ok: false, error: "Enter a supported article URL from Pirate Wires or Substack." };
+    return { ok: false, error: "Enter a supported article URL from Pirate Wires, Substack, or X." };
   }
   const canonicalUrl = canonicalArticleUrl(url, source.sourceType);
   return { ok: true, url: canonicalUrl, slug, ...source };

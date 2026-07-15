@@ -39,7 +39,7 @@ program
 
 program
   .command("speak")
-  .argument("<json-or-url>", "Story JSON file or Pirate Wires story URL")
+  .argument("<json-or-url>", "Story JSON file or supported article URL")
   .option("--provider <provider>", "TTS provider", "openai")
   .option("--allow-over-budget", "Allow audio generation over the $1 estimate", false)
   .description("Generate audio from extracted story JSON or from a story URL.")

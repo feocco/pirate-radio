@@ -49,3 +49,5 @@ registration separately.
   story, image, alignment, library-manifest, and RSS operational state remain
   filesystem-owned and must use atomic replacement for JSON writes.
 - Set `PWR_HEADLESS=true` for Docker or other headless hosts.
+- X Articles must use the official Post lookup API and `X_API_BEARER_TOKEN`;
+  do not add an X browser-scraping fallback.

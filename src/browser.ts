@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 import { validateArticleUrl } from "./backlog.js";
 import { extractStoryFromHtml } from "./extractor.js";
 import type { Story } from "./types.js";
+import { extractXArticleFromUrl } from "./xArticle.js";
 
 export const PROFILE_DIR = ".playwright-profile";
 const LOGGED_IN_TEXT = "My Account";
@@ -33,6 +34,9 @@ export async function extractStoryFromUrl(url: string): Promise<Story> {
   }
   if (validation.sourceType === "substack") {
     return extractPublicStoryFromUrl(validation.url);
+  }
+  if (validation.sourceType === "x") {
+    return extractXArticleFromUrl(validation.url);
   }
 
   const context = await chromium.launchPersistentContext(profileDirFromEnv(), {

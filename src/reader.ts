@@ -333,7 +333,7 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
     <p class="deck">Recent monitored articles, pasted URLs, and custom text that can be queued for audio generation.</p>
   </section>
   <form id="url-queue" class="url-queue wrap">
-    <input id="article-url" class="search" type="url" placeholder="Paste article URL" aria-label="Paste article URL">
+    <input id="article-url" class="search" type="url" placeholder="Paste Pirate Wires, Substack, or X Article URL" aria-label="Paste article URL">
     <button id="queue-url" class="button" type="submit">Convert URL</button>
     <div id="url-status" class="status" role="status"></div>
   </form>

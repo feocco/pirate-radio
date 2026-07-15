@@ -12,8 +12,9 @@ pasted article URLs, and custom pasted text.
    stable Yes/No action IDs.
 4. Listen for Home Assistant `mobile_app_notification_action` events over
    WebSocket.
-5. On article approval, extract the story with Playwright, including title,
-   tagline, body blocks, section headings, and the hero image URL. Custom text
+5. On article approval, extract Pirate Wires through the saved Playwright
+   profile, fetch public Substack HTML directly, or retrieve an X Article's
+   structured `article` field through the official Post lookup API. Custom text
    entries skip extraction and create a story object directly from title/body.
 6. Cache article art locally when available, synthesize MP3 audio through the
    selected TTS provider, and optionally write word-timing alignment JSON.
@@ -60,10 +61,13 @@ manifest, and marks in-flight conversions from service memory. Posting to
 existing `accept` workflow in the background.
 
 The queue page also accepts pasted Pirate Wires, Hyperdimensional, and Substack
-`/p/...` article URLs. `POST /queue/convert-url` validates known article URL
-patterns, records a minimal pending article, and starts the same background
-conversion workflow. Completion/failure still comes through the normal phone
-notifications. `/backlog` routes remain compatibility aliases.
+`/p/...` article URLs plus X `/<username>/status/<id>` Article URLs.
+`POST /queue/convert-url` validates known article URL patterns, records a
+minimal pending article, and starts the same background conversion workflow.
+X extraction uses `GET /2/tweets/<id>?tweet.fields=article` with an app-only
+bearer token; it does not depend on X page markup or a browser session.
+Completion/failure still comes through the normal phone notifications.
+`/backlog` routes remain compatibility aliases.
 
 The same page accepts custom title/text entries. `POST /queue/convert-text`
 validates the title/body, writes a generated story JSON/text file, synthesizes

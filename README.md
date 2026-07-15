@@ -1,8 +1,8 @@
 # Pirate Wires Reader
 
-OIDC-protected homelab reader and local CLI for extracting Pirate Wires stories,
-queueing pasted text, generating OpenAI text-to-speech audio, and reading
-generated audio with cached article art where available.
+OIDC-protected homelab reader and local CLI for extracting Pirate Wires,
+Substack, and X Articles, queueing pasted text, generating OpenAI text-to-speech
+audio, and reading generated audio with cached article art where available.
 
 ## Setup
 
@@ -37,6 +37,8 @@ Outputs:
 
 The extractor keeps the story focused while preserving reader metadata: title,
 tagline, body blocks, best-effort section titles, and the article hero image URL.
+X Articles use the official X Post lookup API and require
+`X_API_BEARER_TOKEN`; the public X page is not scraped.
 
 ## Generate Audio
 
@@ -133,9 +135,10 @@ The reader serves:
 The queue list is RSS-window-only in v1. It compares the current configured
 feeds against the library manifest, then queues selected articles through the
 same approval, extraction, TTS, and notification workflow used by mobile
-actions. Pasted Pirate Wires, Hyperdimensional, and Substack `/p/...` URLs can
-also be queued from the queue page. Custom title/text entries bypass article
-extraction and write directly into the same reader library after TTS generation.
+actions. Pasted Pirate Wires, Hyperdimensional, Substack `/p/...`, and X
+`/<username>/status/<id>` Article URLs can also be queued from the queue page.
+Custom title/text entries bypass article extraction and write directly into the
+same reader library after TTS generation.
 
 Set `PIRATE_RADIO_ENABLE_ALIGNMENT=true` to prototype word-level highlighting.
 When enabled, the service runs a post-TTS `whisper-1` transcription with word

@@ -26,6 +26,7 @@ The app reads configuration from environment variables.
 | `PIRATE_RADIO_SESSION_HOURS` | `24` | Fixed, non-rolling opaque session lifetime. |
 | `PWR_HEADLESS` | unset | Set to `true` for Docker/headless Playwright. |
 | `PWR_PROFILE_DIR` | `.playwright-profile` | Playwright browser profile path. Use a durable mounted path in Docker. |
+| `X_API_BEARER_TOKEN` | none | App-only X API bearer token required for pasted X Article conversions. |
 | `OPENAI_API_KEY` | none | Required for approved TTS generation. |
 | `HA_URL` | none | Home Assistant base URL. |
 | `HA_LONG_LIVED_TOKEN` | none | Home Assistant WebSocket token. |
