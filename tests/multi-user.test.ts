@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "vitest";
 import type { PirateRadioConfig } from "../src/config.js";
+import { appendLibraryItem, readLibraryManifest } from "../src/library.js";
 import { createPirateRadioRequestHandler } from "../src/server.js";
 import { FakeAuthenticator, MemoryStore, adminUser, memberUser } from "./support/fakes.js";
 
@@ -57,6 +58,39 @@ describe("multi-user authorization and progress", () => {
     expect((await fetch(`${runtime.baseUrl}/library.json`)).status).toBe(200);
     expect((await fetch(`${runtime.baseUrl}/admin`)).status).toBe(403);
     expect((await fetch(`${runtime.baseUrl}/simulate/accept/test`, { method: "POST", headers: { origin: runtime.config.publicBaseUrl } })).status).toBe(403);
+  });
+
+  test("allows only administrators to archive and delete a library article", async () => {
+    const runtime = await testServer();
+    const audioPath = join(runtime.config.libraryDir, "audio", "test.mp3");
+    await appendLibraryItem(runtime.config.libraryDir, {
+      slug: "test",
+      title: "Test Article",
+      sourceUrl: "https://example.com/test",
+      audioPath,
+      jsonPath: join(runtime.config.libraryDir, "stories", "test.json"),
+      textPath: join(runtime.config.libraryDir, "text", "test.txt"),
+      publishedAt: "2026-07-16T00:00:00.000Z",
+      generatedAt: "2026-07-16T01:00:00.000Z",
+      estimatedCostUsd: 0.01,
+      wordCount: 2,
+      characterCount: 12,
+    });
+    const path = `${runtime.baseUrl}/admin/articles/test/delete`;
+
+    expect((await fetch(path, { method: "POST", headers: { origin: runtime.config.publicBaseUrl } })).status).toBe(403);
+    expect((await readLibraryManifest(runtime.config.libraryDir)).items).toHaveLength(1);
+
+    runtime.authenticator.principal = { user: adminUser, isAdmin: true };
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { origin: runtime.config.publicBaseUrl },
+      redirect: "manual",
+    });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/");
+    expect((await readLibraryManifest(runtime.config.libraryDir)).items).toHaveLength(0);
+    expect((await fetch(path, { method: "POST", headers: { origin: runtime.config.publicBaseUrl } })).status).toBe(404);
   });
 
   test("rejects state-changing requests from a foreign or missing Origin", async () => {

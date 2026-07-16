@@ -35,6 +35,11 @@ submission, docs, admin, and simulation routes use the native application
 session. Only health, login, and callback are unauthenticated. Forwarded user
 headers are ignored.
 
+Article deletion is an Origin-validated administrator action. It removes an
+item from the active library only after copying its manifest record and
+generated files into the library's `trash/` directory; ordinary members cannot
+invoke the route.
+
 ## Identity and sessions
 
 Authentik supplies OIDC identity and verified-email account linking. Pirate

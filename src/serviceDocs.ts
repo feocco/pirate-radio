@@ -206,6 +206,25 @@ const pirateRadioOpenApi = {
         },
       },
     },
+    "/admin/articles/{slug}/delete": {
+      post: {
+        tags: ["library"],
+        summary: "Archive and remove an article from the active library",
+        parameters: [
+          {
+            name: "slug",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "303": { description: "Article archived and redirected to the library." },
+          "403": { description: "The caller is not an administrator or the Origin is invalid." },
+          "404": { description: "The article is not present in the library manifest." },
+        },
+      },
+    },
     "/progress/{slug}": {
       get: {
         tags: ["library"],
@@ -627,6 +646,7 @@ const endpointDocs: EndpointDoc[] = [
   { method: "GET", path: "/admin", description: "Admin quick-links page for operator checks." },
   { method: "GET", path: "/library.json", description: "Library manifest consumed by the reader UI." },
   { method: "GET", path: "/article/{slug}", description: "Dedicated article page with audio and story text." },
+  { method: "POST", path: "/admin/articles/{slug}/delete", description: "Admin-only recoverable article deletion." },
   { method: "GET", path: "/progress/{slug}", description: "Read saved playback position for one article." },
   { method: "PUT", path: "/progress/{slug}", description: "Persist playback position for one article." },
   { method: "GET", path: "/queue", description: "Queue browser for recent RSS articles." },

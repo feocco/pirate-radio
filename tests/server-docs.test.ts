@@ -91,6 +91,7 @@ describe("service docs endpoints", () => {
     expect(body.paths["/queue.json"]).toBeDefined();
     expect(body.paths["/queue/convert/{slug}"]).toBeDefined();
     expect(body.paths["/progress/{slug}"]).toBeDefined();
+    expect(body.paths["/admin/articles/{slug}/delete"]).toBeDefined();
     expect(body.paths["/docs"]).toBeDefined();
   });
 

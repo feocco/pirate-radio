@@ -99,6 +99,12 @@ Story JSON and `index.json` preserve an optional article author. Feed metadata
 backs RSS conversions; pasted HTML uses page author metadata; missing authors
 remain absent rather than displaying an unknown placeholder.
 
+Administrators can remove an article from the active manifest from its article
+page. Deletion first copies the generated files and a pre-delete manifest into
+`trash/<timestamp>-<slug>/`; Postgres progress and submission history remain
+untouched. This keeps the common action simple while leaving an operator
+recovery path.
+
 The browser may fall back to user-keyed `localStorage` if a progress read fails,
 but normal cross-device state is `GET/PUT /progress/<slug>` in Postgres.
 

@@ -7,7 +7,7 @@ import {
 } from "../src/reader.js";
 import type { LibraryItem } from "../src/library.js";
 import type { Story } from "../src/types.js";
-import { memberUser } from "./support/fakes.js";
+import { adminUser, memberUser } from "./support/fakes.js";
 
 describe("reader page", () => {
   test("renders an audio reader that persists playback position in localStorage", () => {
@@ -177,5 +177,12 @@ describe("reader page", () => {
     expect(html).toContain("A Section");
     expect(html).toContain(">First</span>");
     expect(html).toContain(">paragraph.</span>");
+
+    const adminHtml = renderArticleHtml(story, item, { user: adminUser, isAdmin: true });
+    const memberHtml = renderArticleHtml(story, item, { user: memberUser, isAdmin: false });
+    expect(adminHtml).toContain(`/admin/articles/${item.slug}/delete`);
+    expect(adminHtml).toContain("Delete article");
+    expect(adminHtml).toContain("window.confirm");
+    expect(memberHtml).not.toContain("Delete article");
   });
 });

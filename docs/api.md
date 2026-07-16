@@ -17,6 +17,15 @@ Unauthenticated calls return `401 authentication_required`. `/admin` and
 State-changing calls with a missing or foreign Origin return
 `403 invalid_origin`.
 
+## Admin article deletion
+
+`POST /admin/articles/<slug>/delete` is available only to
+`pirate-radio-admins`. The article page exposes it behind a confirmation. A
+successful request archives the pre-delete manifest and generated article
+files under the library's `trash/` directory, removes the item from the active
+manifest, and redirects to the library. Playback and submission rows remain in
+Postgres as historical application data.
+
 ## Per-user progress
 
 `GET /progress/<slug>` returns only the caller's row. `PUT /progress/<slug>`

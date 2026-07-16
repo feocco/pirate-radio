@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-import { appendLibraryItem, readLibraryManifest } from "../src/library.js";
+import { appendLibraryItem, archiveLibraryItem, readLibraryManifest } from "../src/library.js";
 import { filterVoiceExcludedLibraryManifest } from "../src/articleFilters.js";
 
 let tempDir: string | undefined;
@@ -101,6 +101,50 @@ describe("library visibility filters", () => {
 });
 
 describe("library manifest", () => {
+  test("archives generated files before removing an article from the active manifest", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-library-"));
+    const slug = "delete-me";
+    const paths = {
+      audio: join(tempDir, "audio", `${slug}.mp3`),
+      story: join(tempDir, "stories", `${slug}.json`),
+      text: join(tempDir, "text", `${slug}.txt`),
+      image: join(tempDir, "images", `${slug}.jpg`),
+    };
+    await Promise.all(Object.values(paths).map((path) => mkdir(dirname(path), { recursive: true })));
+    await Promise.all([
+      writeFile(paths.audio, "audio"),
+      writeFile(paths.story, JSON.stringify({ title: "Delete Me" })),
+      writeFile(paths.text, "article text"),
+      writeFile(paths.image, "image"),
+    ]);
+    await appendLibraryItem(tempDir, {
+      slug,
+      title: "Delete Me",
+      sourceUrl: "https://example.com/delete-me",
+      audioPath: paths.audio,
+      jsonPath: paths.story,
+      textPath: paths.text,
+      imagePath: paths.image,
+      imageUrl: `/images/${slug}.jpg`,
+      publishedAt: "2026-07-16T00:00:00.000Z",
+      generatedAt: "2026-07-16T01:00:00.000Z",
+      estimatedCostUsd: 0.01,
+      wordCount: 2,
+      characterCount: 9,
+    });
+
+    const archived = await archiveLibraryItem(tempDir, slug, "admin");
+
+    expect(archived?.deletedByUsername).toBe("admin");
+    expect((await readLibraryManifest(tempDir)).items).toHaveLength(0);
+    await expect(readFile(paths.audio)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(archived!.archiveDir, "audio", `${slug}.mp3`), "utf8")).resolves.toBe("audio");
+    const deletion = JSON.parse(await readFile(join(archived!.archiveDir, "deletion.json"), "utf8"));
+    const priorManifest = JSON.parse(await readFile(join(archived!.archiveDir, "manifest-before.json"), "utf8"));
+    expect(deletion).toMatchObject({ deletedByUsername: "admin", item: { slug } });
+    expect(priorManifest.items).toHaveLength(1);
+  });
+
   test("stores MP3 metadata without embedding audio bytes in the manifest", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "pirate-library-"));
     const audioPath = join(tempDir, "audio", "inside-microns-attempts.mp3");

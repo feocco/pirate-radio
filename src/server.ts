@@ -11,7 +11,7 @@ import { OidcAuthenticator, ForbiddenIdentityError, originAllowed, sendAuthentic
 import { validateIdentityConfig, type PirateRadioConfig } from "./config.js";
 import { PirateRadioDatabase, type PirateRadioStore } from "./database.js";
 import { HomeAssistantActionListener } from "./haActions.js";
-import { readLibraryManifest } from "./library.js";
+import { archiveLibraryItem, readLibraryManifest } from "./library.js";
 import {
   buildArticleFailureNotification,
   buildArticleNotification,
@@ -462,6 +462,22 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       }
       return;
     }
+    if (request.method === "POST" && deleteArticleSlug(url.pathname)) {
+      const slug = decodeURIComponent(deleteArticleSlug(url.pathname) ?? "");
+      const archived = await archiveLibraryItem(
+        options.config.libraryDir,
+        slug,
+        principal.user.username,
+      );
+      if (!archived) {
+        json(response, 404, { error: "article_not_found" });
+        return;
+      }
+      console.log(`[pirate-radio] archived article ${slug} by ${principal.user.username}`);
+      response.writeHead(303, { location: "/", "cache-control": "no-store" });
+      response.end();
+      return;
+    }
     if (request.method === "GET" && url.pathname.startsWith("/article/")) {
       await renderArticle(
         response,
@@ -469,6 +485,7 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
         decodeURIComponent(url.pathname),
         options.store,
         principal.user,
+        principal.isAdmin,
         options.config.identitySettingsUrl,
       );
       return;
@@ -572,7 +589,7 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
 }
 
 function adminPath(pathname: string): boolean {
-  return pathname === "/admin" || pathname.startsWith("/simulate/");
+  return pathname === "/admin" || pathname.startsWith("/admin/") || pathname.startsWith("/simulate/");
 }
 
 function publicPrincipal(principal: AuthenticatedRequest) {
@@ -606,12 +623,18 @@ function queueConvertSlug(pathname: string): string | undefined {
   return undefined;
 }
 
+function deleteArticleSlug(pathname: string): string | undefined {
+  const match = pathname.match(/^\/admin\/articles\/([^/]+)\/delete$/);
+  return match?.[1];
+}
+
 async function renderArticle(
   response: ServerResponse,
   libraryDir: string,
   pathname: string,
   store: PirateRadioStore,
   user: AuthenticatedRequest["user"],
+  isAdmin: boolean,
   identitySettingsUrl?: string,
 ): Promise<void> {
   const slug = basename(pathname);
@@ -626,7 +649,7 @@ async function renderArticle(
     store.completedUsers(slug),
     store.firstSuccessfulSubmitter(slug),
   ]);
-  html(response, renderArticleHtml(story, item, { user, completedUsers, submittedBy, identitySettingsUrl }));
+  html(response, renderArticleHtml(story, item, { user, isAdmin, completedUsers, submittedBy, identitySettingsUrl }));
 }
 
 async function streamAudio(

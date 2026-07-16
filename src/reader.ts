@@ -48,6 +48,8 @@ const sharedCss = `
   audio { width: 100%; display: block; margin-top: 14px; }
   .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
   .readlink, .button { display: inline-block; background: #000; color: #fff; text-decoration: none; padding: 9px 13px; font-weight: 900; border: 1px solid #000; font: inherit; cursor: pointer; }
+  .danger-form { display: inline-block; margin: 0; }
+  .danger-button { background: #9d1111; border-color: #9d1111; }
   .button:disabled, .badge { background: transparent; color: var(--ink); cursor: default; }
   .badge { display: inline-block; padding: 9px 13px; border: 1px solid var(--line); font-weight: 900; }
   .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: 24px auto 0; }
@@ -581,7 +583,7 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
 export function renderArticleHtml(
   story: Story,
   item: LibraryItem,
-  identity: { user?: ApplicationUser; completedUsers?: ApplicationUser[]; submittedBy?: ApplicationUser; identitySettingsUrl?: string } = {},
+  identity: { user?: ApplicationUser; isAdmin?: boolean; completedUsers?: ApplicationUser[]; submittedBy?: ApplicationUser; identitySettingsUrl?: string } = {},
 ): string {
   const blocks = story.contentBlocks?.length
     ? story.contentBlocks
@@ -614,6 +616,7 @@ export function renderArticleHtml(
     <section class="player-panel">
       <a class="readlink" href="/">Library</a>
       <a class="readlink" href="${escapeAttribute(item.audioUrl)}" download="${escapeAttribute(item.slug)}.mp3">Download MP3</a>
+      ${identity.isAdmin ? `<form class="danger-form" method="post" action="${escapeAttribute(`/admin/articles/${encodeURIComponent(item.slug)}/delete`)}" onsubmit="return window.confirm('Delete this article? A recoverable archive will be kept.');"><button class="button danger-button" type="submit">Delete article</button></form>` : ""}
       <audio id="article-audio" controls preload="metadata" src="${escapeAttribute(item.audioUrl)}"></audio>
     </section>
     <section class="body" id="story-body">

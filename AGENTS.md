@@ -53,3 +53,6 @@ registration separately.
   do not add an X browser-scraping fallback.
 - Preserve optional article authors from extraction/feed metadata into both
   story JSON and `index.json`; omit missing bylines instead of inventing one.
+- Keep article deletion admin-only and recoverable: archive generated files and
+  the pre-delete manifest under `trash/` before changing `index.json`, and do
+  not erase Postgres progress or submission history as part of that action.
