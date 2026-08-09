@@ -1,4 +1,4 @@
-# Pirate Wires Reader Agent Notes
+# Pirate Radio Agent Notes
 
 This repo owns the public application code for Pirate Radio. Keep private
 runtime configuration in `homelab-config`.

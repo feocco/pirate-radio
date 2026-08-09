@@ -1,8 +1,9 @@
-# Pirate Wires Reader
+# Pirate Radio
 
-OIDC-protected homelab reader and local CLI for extracting Pirate Wires,
-Substack, and X Articles, queueing pasted text, generating OpenAI text-to-speech
-audio, and reading generated audio with cached article art where available.
+OIDC-protected homelab reader and local CLI for collecting articles from across
+the web, queueing pasted text, generating OpenAI text-to-speech audio, and
+reading generated audio with cached article art where available. Supported
+article sources include Pirate Wires, Substack publications, and X Articles.
 
 ## Setup
 

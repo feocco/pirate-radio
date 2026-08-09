@@ -1,10 +1,11 @@
 {
-  "name": "pirate-wires-reader",
+  "name": "pirate-radio",
   "version": "0.1.0",
+  "description": "Private multi-source audio reader and text-to-speech service.",
   "private": true,
   "type": "module",
   "bin": {
-    "pirate-wires-reader": "./dist/src/cli.js"
+    "pirate-radio": "./dist/src/cli.js"
   },
   "scripts": {
     "build": "tsc",
