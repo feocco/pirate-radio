@@ -116,11 +116,6 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
 </head>
 <body>
   ${renderChrome("library", user, identitySettingsUrl)}
-  <section class="hero wrap">
-    <div class="kicker">Audio dispatches</div>
-    <h1>Pirate Radio</h1>
-    <p class="deck">A private audio reader for dispatches from across the web, with saved playback, cached art, and the full article one tap away.</p>
-  </section>
   <section class="toolbar wrap" aria-label="Library controls">
     <select id="source-filter" class="select" aria-label="Filter by source">
       <option value="">All sources</option>

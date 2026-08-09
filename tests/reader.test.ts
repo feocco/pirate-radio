@@ -33,8 +33,9 @@ describe("reader page", () => {
     expect(html).toContain("Download MP3");
     expect(html).toContain("Pirate Radio");
     expect(html).toContain('<span class="mark">PR</span>');
-    expect(html).toContain("A private audio reader for dispatches from across the web, with saved playback, cached art, and the full article one tap away.");
-    expect(html).not.toContain("A private Pirate Wires audio shelf");
+    expect(html).not.toContain('<section class="hero wrap">');
+    expect(html).not.toContain("Audio dispatches");
+    expect(html).not.toContain("A private audio reader for dispatches from across the web");
     expect(html).toContain('href="/queue"');
     expect(html).toContain('href="/admin"');
     expect(html).toContain('<a class="brandlink active" href="/" aria-label="Pirate Radio home">');
