@@ -32,6 +32,9 @@ describe("reader page", () => {
     expect(html).toContain("Read");
     expect(html).toContain("Download MP3");
     expect(html).toContain("Pirate Radio");
+    expect(html).toContain('<span class="mark">PR</span>');
+    expect(html).toContain("A private audio reader for dispatches from across the web, with saved playback, cached art, and the full article one tap away.");
+    expect(html).not.toContain("A private Pirate Wires audio shelf");
     expect(html).toContain('href="/queue"');
     expect(html).toContain('href="/admin"');
     expect(html).toContain('<a class="brandlink active" href="/" aria-label="Pirate Radio home">');
@@ -58,7 +61,7 @@ describe("reader page", () => {
     expect(html).toContain("/queue/convert/");
     expect(html).toContain("/queue/convert-url");
     expect(html).toContain("/queue/convert-text");
-    expect(html).toContain("Paste Pirate Wires, Substack, or X Article URL");
+    expect(html).toContain("Paste an article URL (Pirate Wires, Substack, or X).");
     expect(html).toContain("Custom text title");
     expect(html).toContain("Paste text to convert");
     expect(html).toContain("queueText");

@@ -119,7 +119,7 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
   <section class="hero wrap">
     <div class="kicker">Audio dispatches</div>
     <h1>Pirate Radio</h1>
-    <p class="deck">A private Pirate Wires audio shelf with saved playback, cached art, and the full article one tap away.</p>
+    <p class="deck">A private audio reader for dispatches from across the web, with saved playback, cached art, and the full article one tap away.</p>
   </section>
   <section class="toolbar wrap" aria-label="Library controls">
     <select id="source-filter" class="select" aria-label="Filter by source">
@@ -335,7 +335,7 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
     <p class="deck">Recent monitored articles, pasted URLs, and custom text that can be queued for audio generation.</p>
   </section>
   <form id="url-queue" class="url-queue wrap">
-    <input id="article-url" class="search" type="url" placeholder="Paste Pirate Wires, Substack, or X Article URL" aria-label="Paste article URL">
+    <input id="article-url" class="search" type="url" placeholder="Paste an article URL (Pirate Wires, Substack, or X)." aria-label="Paste article URL">
     <button id="queue-url" class="button" type="submit">Convert URL</button>
     <div id="url-status" class="status" role="status"></div>
   </form>
@@ -745,7 +745,7 @@ function renderChrome(activePage: ActivePage, user?: ApplicationUser, identitySe
       if (accountMenu.open && !accountMenu.contains(event.target)) accountMenu.open = false;
     });
   </script>` : "";
-  return `<div class="brandbar"><a class="${brandClass}" href="/" aria-label="Pirate Radio home"><span class="mark">PW</span><span>Pirate Radio</span></a>${account}</div>
+  return `<div class="brandbar"><a class="${brandClass}" href="/" aria-label="Pirate Radio home"><span class="mark">PR</span><span>Pirate Radio</span></a>${account}</div>
   <nav class="topbar" aria-label="Primary">${items
     .map(
       (item) =>

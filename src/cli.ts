@@ -15,8 +15,8 @@ import type { Story } from "./types.js";
 const program = new Command();
 
 program
-  .name("pirate-wires-reader")
-  .description("Extract Pirate Wires stories and generate local TTS audio.")
+  .name("pirate-radio")
+  .description("Monitor articles, generate TTS audio, and serve the Pirate Radio reader.")
   .version("0.1.0");
 
 program
