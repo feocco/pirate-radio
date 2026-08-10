@@ -9,6 +9,13 @@ source scripts/dev/env.sh
 
 mkdir -p "$PIRATE_RADIO_DEV_DIR" "$PIRATE_RADIO_LIBRARY_DIR"
 
+# Self-heal: if the Build's `install` phase has not run yet (no dist, or Postgres
+# missing), run it now so the stack works on a first, buildless boot too.
+if [ ! -f dist/src/cli.js ] || ! command -v pg_ctlcluster >/dev/null 2>&1; then
+  echo "[start] install artifacts missing; running install.sh"
+  bash scripts/dev/install.sh || echo "[start] install fallback had issues"
+fi
+
 # Start Postgres (cluster binaries come from the Build; data dir resets per run).
 sudo pg_ctlcluster 16 main start 2>/dev/null || true
 for _ in $(seq 1 30); do
