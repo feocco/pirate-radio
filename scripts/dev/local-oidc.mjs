@@ -18,6 +18,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateKeyPair, exportJWK, SignJWT } from "jose";
 
+// GUARDRAIL: this issuer auto-approves logins and mints an admin identity. It is
+// only allowed in the dev stack, never in a real deployment.
+if (process.env.PIRATE_RADIO_DEV_STACK !== "1" || process.env.NODE_ENV === "production") {
+  console.error("[local-oidc] refusing to start: dev-only issuer. Set PIRATE_RADIO_DEV_STACK=1 and ensure NODE_ENV!=production (see scripts/dev/env.sh).");
+  process.exit(1);
+}
+
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const HOST = process.env.LOCAL_OIDC_HOST ?? "127.0.0.1";
 const PORT = Number(process.env.LOCAL_OIDC_PORT ?? 9443);
@@ -29,6 +36,14 @@ const SUBJECT = process.env.LOCAL_OIDC_SUBJECT ?? "demo-reader-subject";
 const USERNAME = process.env.LOCAL_OIDC_USERNAME ?? "demo.reader";
 const NAME = process.env.LOCAL_OIDC_NAME ?? "Demo Reader";
 const EMAIL = process.env.LOCAL_OIDC_EMAIL ?? "demo.reader@example.com";
+
+// GUARDRAIL: bind loopback only unless explicitly overridden, so the auto-approve
+// issuer is never exposed off-box.
+const LOOPBACK = HOST === "127.0.0.1" || HOST === "::1" || HOST === "localhost";
+if (!LOOPBACK && process.env.LOCAL_OIDC_ALLOW_NONLOOPBACK !== "1") {
+  console.error(`[local-oidc] refusing to bind non-loopback host "${HOST}". Set LOCAL_OIDC_ALLOW_NONLOOPBACK=1 to override (not recommended).`);
+  process.exit(1);
+}
 
 const devDir = process.env.PIRATE_RADIO_DEV_DIR ?? "/tmp/pirate-radio-dev";
 const keyPath = join(devDir, "oidc-key.pem");

@@ -5,6 +5,9 @@
 # NOTE: NODE_TLS_REJECT_UNAUTHORIZED=0 is set ONLY so `serve` trusts the
 # self-signed local OIDC issuer (scripts/dev/local-oidc.mjs). Dev-only.
 
+# Opt-in flag that authorizes the dev-only OIDC issuer and seed to run.
+export PIRATE_RADIO_DEV_STACK=1
+
 export PIRATE_RADIO_DEV_DIR="${PIRATE_RADIO_DEV_DIR:-/tmp/pirate-radio-dev}"
 
 export DATABASE_URL="${DATABASE_URL:-postgres://pirate_radio:pirate_radio@127.0.0.1:5432/pirate_radio}"
