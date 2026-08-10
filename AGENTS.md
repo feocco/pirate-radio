@@ -92,11 +92,25 @@ Durable gotchas and clarifications:
   (`piratewires.substack.com`, `www.hyperdimensional.co`) must be added to the
   Network Access allowlist, and that change only applies to a freshly booted
   agent VM (not the current session).
-- Seeding regenerates per run because user secrets (the `OPENAI_API_KEY` used
-  for TTS) are not available during Builds. `scripts/dev/seed.mjs` is
-  idempotent (skips slugs already in the manifest), tunable via
-  `PIRATE_RADIO_SEED_COUNT` / `PIRATE_RADIO_SEED_MAX_CHARS`, and pulls live
-  Substack-type articles when feeds are reachable, else uses bundled samples.
+- Seeding is fixtures-first and costs nothing at runtime: `scripts/dev/seed.mjs`
+  copies pre-generated MP3s and hero images from `scripts/dev/seed-assets/`
+  (committed to the repo) into the library and records matching Postgres rows.
+  No OpenAI key is needed at agent start, so `OPENAI_API_KEY` stays a personal
+  (user) secret and no per-run TTS cost is incurred. Feed-sourced samples carry
+  hero images; Custom Text intentionally has none. It is idempotent (skips slugs
+  already in the manifest). To refresh the committed assets, regenerate the MP3s
+  with a key and re-commit them under `seed-assets/audio/` (and images under
+  `seed-assets/images/`).
+- Opt-in `PIRATE_RADIO_SEED_DYNAMIC=1` pulls recent live Substack-type articles
+  via real extraction + OpenAI TTS (needs a key and feed egress; incurs cost and
+  regenerates per run). Off by default.
+- The dev OIDC issuer (`scripts/dev/local-oidc.mjs`) and `seed.mjs` are guarded:
+  they refuse to run unless `PIRATE_RADIO_DEV_STACK=1` (set only in
+  `scripts/dev/env.sh`) and `NODE_ENV` is not `production`, and the issuer binds
+  loopback only. They can never touch a real deployment.
+- Do not point `PIRATE_RADIO_TEST_DATABASE_URL` at the same database as the dev
+  `DATABASE_URL`: the integration suite `TRUNCATE`s app tables and will wipe
+  seeded users/sessions/submissions.
 - Session/OIDC cookies are `Secure`. Drive the reader over `http://127.0.0.1`
   (a browser secure context), not a LAN IP, or the session cookie is dropped
   and login appears to loop.
