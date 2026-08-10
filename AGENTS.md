@@ -56,3 +56,34 @@ registration separately.
 - Keep article deletion admin-only and recoverable: archive generated files and
   the pre-delete manifest under `trash/` before changing `index.json`, and do
   not erase Postgres progress or submission history as part of that action.
+
+## Cursor Cloud specific instructions
+
+Startup runs `npm ci` and `npx playwright install chromium`. Everything below
+is run/verify guidance, not install steps.
+
+- There is no lint script. Static checking is `npm run build` (`tsc`). The full
+  verification set is in `## Verification` above (`npm test`, `npm run build`,
+  `docker build`).
+- `npm test` runs fully offline against mocks/fixtures. The Postgres
+  integration suite (`tests/database.integration.test.ts`) is skipped unless
+  `PIRATE_RADIO_TEST_DATABASE_URL` points at a reachable Postgres. Postgres is
+  not preinstalled; install and start a local cluster (e.g. `apt-get install
+  postgresql` then `pg_ctlcluster 16 main start`) only when you need the DB
+  suite or `serve`.
+- Outbound egress is restricted here: live feeds (piratewires/substack), OpenAI
+  TTS, and a real Authentik are unreachable. Full conversions and real Authentik
+  login therefore need user-provided secrets plus network allowlisting. For
+  offline work, point `PIRATE_RADIO_FEED_URL` at a local RSS file/URL so the
+  poll loop succeeds (a local server can reuse `tests/fixtures/pirate-feed.xml`).
+- `serve` performs OIDC discovery at startup and fails fast if the issuer is
+  unreachable, so the HTTP server never binds without a working issuer.
+  openid-client v6 rejects plaintext-HTTP issuers (localhost included): a local
+  stand-in issuer must be HTTPS, and a self-signed dev issuer needs
+  `NODE_TLS_REJECT_UNAUTHORIZED=0` on the `serve` process.
+- The startup RSS poll runs before the poll interval; if a feed fetch throws,
+  `serve` startup rejects even though the listener already bound. Keep feeds
+  reachable when running `serve` locally.
+- Session/OIDC cookies are `Secure`. Drive the reader over `http://127.0.0.1`
+  (a browser secure context) rather than a LAN IP, or the session cookie is not
+  stored and login appears to loop.
