@@ -59,31 +59,44 @@ registration separately.
 
 ## Cursor Cloud specific instructions
 
-Startup runs `npm ci` and `npx playwright install chromium`. Everything below
-is run/verify guidance, not install steps.
+The cloud dev stack is defined in `.cursor/environment.json` + `scripts/dev/`
+(all dev-only; never used by the homelab runtime):
 
-- There is no lint script. Static checking is `npm run build` (`tsc`). The full
-  verification set is in `## Verification` above (`npm test`, `npm run build`,
+- `install` (`scripts/dev/install.sh`, runs at Build): `npm ci`, Playwright
+  chromium, local Postgres, `npm run build`.
+- `start` (`scripts/dev/start.sh`, per run): starts Postgres, ensures the
+  `pirate_radio` role/db, and runs `scripts/dev/seed.mjs`.
+- `terminals`: `scripts/dev/local-oidc.mjs` (local OIDC issuer) and
+  `scripts/dev/serve.sh` (waits for the issuer, picks reachable feeds, runs
+  `serve`).
+
+Durable gotchas and clarifications:
+
+- There is no lint script. Static checking is `npm run build` (`tsc`). Full
+  verification set is under `## Verification` (`npm test`, `npm run build`,
   `docker build`).
-- `npm test` runs fully offline against mocks/fixtures. The Postgres
-  integration suite (`tests/database.integration.test.ts`) is skipped unless
-  `PIRATE_RADIO_TEST_DATABASE_URL` points at a reachable Postgres. Postgres is
-  not preinstalled; install and start a local cluster (e.g. `apt-get install
-  postgresql` then `pg_ctlcluster 16 main start`) only when you need the DB
-  suite or `serve`.
-- Outbound egress is restricted here: live feeds (piratewires/substack), OpenAI
-  TTS, and a real Authentik are unreachable. Full conversions and real Authentik
-  login therefore need user-provided secrets plus network allowlisting. For
-  offline work, point `PIRATE_RADIO_FEED_URL` at a local RSS file/URL so the
-  poll loop succeeds (a local server can reuse `tests/fixtures/pirate-feed.xml`).
-- `serve` performs OIDC discovery at startup and fails fast if the issuer is
-  unreachable, so the HTTP server never binds without a working issuer.
-  openid-client v6 rejects plaintext-HTTP issuers (localhost included): a local
-  stand-in issuer must be HTTPS, and a self-signed dev issuer needs
-  `NODE_TLS_REJECT_UNAUTHORIZED=0` on the `serve` process.
-- The startup RSS poll runs before the poll interval; if a feed fetch throws,
-  `serve` startup rejects even though the listener already bound. Keep feeds
-  reachable when running `serve` locally.
+- `npm test` runs offline against mocks/fixtures. The Postgres integration suite
+  (`tests/database.integration.test.ts`) is skipped unless
+  `PIRATE_RADIO_TEST_DATABASE_URL` points at a reachable Postgres.
+- `serve` needs `DATABASE_URL` + OIDC issuer/client/secret and does OIDC
+  discovery at startup, so the HTTP server never binds without a reachable
+  issuer. openid-client v6 rejects plaintext-HTTP issuers (localhost included),
+  so the local dev issuer is HTTPS and `serve` runs with
+  `NODE_TLS_REJECT_UNAUTHORIZED=0` (set in `scripts/dev/env.sh`; dev-only).
+- The startup RSS poll runs before the interval and uses `Promise.all`, so one
+  unreachable feed rejects `serve` startup after the listener bound.
+  `scripts/dev/serve.sh` builds `PIRATE_RADIO_FEEDS` from only the reachable
+  feeds and falls back to the local issuer's `/feed.xml` when all are blocked.
+- Egress is an allowlist, not a full block: `api.openai.com` is reachable, so
+  OpenAI TTS only needs the `OPENAI_API_KEY` secret. The public RSS feeds
+  (`piratewires.substack.com`, `www.hyperdimensional.co`) must be added to the
+  Network Access allowlist, and that change only applies to a freshly booted
+  agent VM (not the current session).
+- Seeding regenerates per run because user secrets (the `OPENAI_API_KEY` used
+  for TTS) are not available during Builds. `scripts/dev/seed.mjs` is
+  idempotent (skips slugs already in the manifest), tunable via
+  `PIRATE_RADIO_SEED_COUNT` / `PIRATE_RADIO_SEED_MAX_CHARS`, and pulls live
+  Substack-type articles when feeds are reachable, else uses bundled samples.
 - Session/OIDC cookies are `Secure`. Drive the reader over `http://127.0.0.1`
-  (a browser secure context) rather than a LAN IP, or the session cookie is not
-  stored and login appears to loop.
+  (a browser secure context), not a LAN IP, or the session cookie is dropped
+  and login appears to loop.
