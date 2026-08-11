@@ -56,6 +56,11 @@ registration separately.
 - Keep article deletion admin-only and recoverable: archive generated files and
   the pre-delete manifest under `trash/` before changing `index.json`, and do
   not erase Postgres progress or submission history as part of that action.
+- Reuse shared UI components across views when behavior and visual design should
+  match. Media playback lives in `src/mediaPlayer.ts`; every library and article
+  view must call that component instead of creating another player or control
+  set. Follow the same one-module, many-callers pattern for other cohesive UI.
+  Page renderers pass data and page-only hooks.
 
 ## Cursor Cloud specific instructions
 

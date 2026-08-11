@@ -31,9 +31,15 @@ still selects the correct virtual host. Do not restore a node-wide direct app
 port mapping: that would bypass Caddy and the service-specific friend grant.
 
 All reader, article, media, range, image, alignment, manifest, queue, progress,
-submission, docs, admin, and simulation routes use the native application
-session. Only health, login, and callback are unauthenticated. Forwarded user
-headers are ignored.
+submission, docs, admin, vendor player assets, and simulation routes use the
+native application session. Only health, login, and callback are
+unauthenticated. Forwarded user headers are ignored.
+
+Self-hosted Shikwasa assets are served only from the fixed authenticated paths
+`/vendor/shikwasa/shikwasa.iife.js` and `/vendor/shikwasa/style.css`. There is no
+generic static-file route. The shared media player escapes title and source name
+before handing them to Shikwasa, which assigns those fields with `innerHTML`, and
+accepts cover art only when the URL starts with `/images/`.
 
 Article deletion is an Origin-validated administrator action. It removes an
 item from the active library only after copying its manifest record and
