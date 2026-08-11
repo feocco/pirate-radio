@@ -118,6 +118,12 @@ Durable gotchas and clarifications:
   (`piratewires.substack.com`, `www.hyperdimensional.co`, and the substack image
   CDN `substackcdn.com`) must be added there, and only take effect on a
   freshly-booted agent.
+- Known limitation — authenticated sources: Pirate Wires (paywalled, needs a
+  logged-in Playwright profile) and X Articles (need `X_API_BEARER_TOKEN`) can't
+  be fully extracted in cloud runs without credentials, so real-data harvest for
+  those sources is partial (Pirate Wires falls back to the RSS summary). Public
+  sources (Substack/Hyperdimensional) are unaffected. See the scoped rule
+  `.cursor/rules/authenticated-sources.mdc` for details.
 - The dev OIDC issuer (`scripts/dev/local-oidc.mjs`) and `seed.mjs` are guarded:
   they refuse to run unless `PIRATE_RADIO_DEV_STACK=1` (set only in
   `scripts/dev/env.sh`) and `NODE_ENV` is not `production`, and the issuer binds
