@@ -104,6 +104,20 @@ Durable gotchas and clarifications:
 - Opt-in `PIRATE_RADIO_SEED_DYNAMIC=1` pulls recent live Substack-type articles
   via real extraction + OpenAI TTS (needs a key and feed egress; incurs cost and
   regenerates per run). Off by default.
+- Real-data fixtures: `scripts/dev/harvest.mjs` pulls the latest real articles
+  from the configured RSS feeds, downloads their real hero images, runs real
+  OpenAI TTS once, and writes `scripts/dev/seed-assets/` (audio + images +
+  `articles.json`). Run it once in an egress-enabled environment, then commit
+  the refreshed fixtures; runtime seeding stays cost-free. It reuses the app's
+  extractor, so public sources (e.g. Hyperdimensional) get full body text while
+  paywalled sources (Pirate Wires) fall back to the RSS summary unless a
+  logged-in Playwright profile is wired. The committed feed samples are
+  placeholders until a harvest runs against reachable feeds.
+- Feed egress applies at the run's network-access scope. Runs with no linked
+  environment use the user/team-level allowlist, so the feed domains
+  (`piratewires.substack.com`, `www.hyperdimensional.co`, and the substack image
+  CDN `substackcdn.com`) must be added there, and only take effect on a
+  freshly-booted agent.
 - The dev OIDC issuer (`scripts/dev/local-oidc.mjs`) and `seed.mjs` are guarded:
   they refuse to run unless `PIRATE_RADIO_DEV_STACK=1` (set only in
   `scripts/dev/env.sh`) and `NODE_ENV` is not `production`, and the issuer binds
