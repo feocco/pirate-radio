@@ -1,0 +1,42 @@
+---
+description: Known limitation — authenticated/paywalled article sources (Pirate Wires, X) need credentials + egress; not all sources are authenticated
+globs: src/browser.ts,src/xArticle.ts,scripts/dev/harvest.mjs
+alwaysApply: false
+---
+
+# Authenticated article sources (known limitation)
+
+Some article sources require credentials to extract full content; most do not.
+This file/directory contains that logic. Keep the distinction explicit.
+
+## Which sources are authenticated
+
+- **Pirate Wires** (`src/browser.ts`): paywalled. Full extraction requires a
+  logged-in persistent Playwright profile (`PWR_PROFILE_DIR`). Without a session
+  it fails closed with `PirateWiresAuthRequiredError`. Canonical host is
+  `www.piratewires.com`; the RSS feed is `piratewires.substack.com`.
+- **X Articles** (`src/xArticle.ts`): require `X_API_BEARER_TOKEN` and use the
+  official Post lookup API. Do NOT add a browser-scraping fallback for X.
+- **Public sources** (Substack / Hyperdimensional): no authentication. Extracted
+  via plain HTTP fetch; no profile or token needed.
+
+## Cloud Agent limitation (why real data is partial here)
+
+Cloud Agents have no Pirate Wires login session and (unless set) no
+`X_API_BEARER_TOKEN`, and restricted egress. Therefore:
+
+- Pirate Wires: cloud runs get real title/author/date and the public hero image,
+  but body text falls back to the RSS summary unless a logged-in Playwright
+  profile is provided. `scripts/dev/harvest.mjs` follows this same fallback.
+- X: conversions fail without `X_API_BEARER_TOKEN` (add it as a Cursor Secret).
+- Public sources are unaffected and yield full body text.
+- The relevant domains must also be on the Cloud Agent network allowlist
+  (e.g. `piratewires.substack.com`, `substackcdn.com`, plus the X API host).
+
+## Guidance when editing this logic
+
+- Preserve the fail-closed behavior for paywalled Pirate Wires; never fabricate
+  body text to paper over a missing session.
+- Keep the public vs authenticated code paths separate; do not require a token
+  or profile for public sources.
+- Do not add an X scraping fallback (see `AGENTS.md`).
