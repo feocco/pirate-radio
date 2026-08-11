@@ -155,11 +155,7 @@ entirely.
 
 ### Testing the login flow
 
-With the stack running, `node scripts/dev/smoke-login.mjs` drives the full
-authorization-code + PKCE handshake non-interactively: it asserts the
-transaction cookie round-trips, `/auth/callback` sets a session, `/auth/me`
-returns the user, and (negative case) that a callback missing the transaction
-cookie fails with `invalid_oidc_callback`. That last check reproduces the
-origin/cookie mismatch behind the port-forwarding gotcha, so it guards against
-that regression. For a real browser check, log in inside the VM or via the
-forwarded `http://localhost:8123`.
+For a browser check, log in inside the VM or via the forwarded
+`http://localhost:8123`. The auth unit/integration logic is also covered by
+`npm test` (point `PIRATE_RADIO_TEST_DATABASE_URL` at a database separate from
+the dev `DATABASE_URL`, since the integration suite truncates tables).
