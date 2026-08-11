@@ -152,3 +152,14 @@ Heavier alternative: point `PIRATE_RADIO_OIDC_ISSUER` / `_CLIENT_ID` /
 `_CLIENT_SECRET` at your real Authentik and register the forwarded app's
 `/auth/callback` as a redirect URI. That removes the self-signed local issuer
 entirely.
+
+### Testing the login flow
+
+With the stack running, `node scripts/dev/smoke-login.mjs` drives the full
+authorization-code + PKCE handshake non-interactively: it asserts the
+transaction cookie round-trips, `/auth/callback` sets a session, `/auth/me`
+returns the user, and (negative case) that a callback missing the transaction
+cookie fails with `invalid_oidc_callback`. That last check reproduces the
+origin/cookie mismatch behind the port-forwarding gotcha, so it guards against
+that regression. For a real browser check, log in inside the VM or via the
+forwarded `http://localhost:8123`.
