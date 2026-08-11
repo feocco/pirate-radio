@@ -137,6 +137,9 @@ Durable gotchas and clarifications:
 - Do not point `PIRATE_RADIO_TEST_DATABASE_URL` at the same database as the dev
   `DATABASE_URL`: the integration suite `TRUNCATE`s app tables and will wipe
   seeded users/sessions/submissions.
-- Session/OIDC cookies are `Secure`. Drive the reader over `http://127.0.0.1`
-  (a browser secure context), not a LAN IP, or the session cookie is dropped
-  and login appears to loop.
+- Session/OIDC cookies are `Secure` and host-only. Drive the reader over the
+  exact `PIRATE_RADIO_PUBLIC_URL` origin (default `http://localhost:8123`, which
+  matches Cursor Desktop's forwarded origin) — a browser secure context, not a
+  LAN IP, and never mix `localhost` with `127.0.0.1`, or the OAuth cookie is
+  dropped and the callback fails with `invalid_oidc_callback`. See
+  [docs/cloud-agents.md](docs/cloud-agents.md) for the port-forwarding details.
