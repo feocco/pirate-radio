@@ -112,3 +112,42 @@ Cross-cutting:
   from live RSS, then commit them.
 - Authenticated sources (Pirate Wires paywall, X) stay limited without
   credentials — see `.cursor/rules/authenticated-sources.mdc`.
+
+## 6. Logging in from your local machine (port forwarding)
+
+The dev login flow assumes the browser runs **inside** the cloud VM, where the
+app (`127.0.0.1:8123`) and the local OIDC issuer (`127.0.0.1:9443`) share the
+VM's loopback. When you forward the port and drive it from Cursor Desktop, the
+OAuth callback can fail with `{"error":"invalid_oidc_callback"}`. Two reasons:
+
+- The transaction cookie (`pirate_radio_oidc`) is `Secure` and host-only. It is
+  set by `/auth/login` on the origin your browser used, and must come back on
+  `/auth/callback`. The callback origin is derived from `PIRATE_RADIO_PUBLIC_URL`
+  (default `http://127.0.0.1:8123`). If your browser reached the app on a
+  *different* origin (e.g. `http://localhost:8123`, or a different forwarded
+  port), the issuer redirects you to an origin that doesn't hold the cookie, so
+  the transaction lookup fails. Note `localhost` and `127.0.0.1` are different
+  cookie origins.
+- The browser must also reach the issuer (`PIRATE_RADIO_OIDC_ISSUER`, default
+  `https://127.0.0.1:9443`) to complete the authorize step, so that port has to
+  be forwarded too.
+
+Fix — keep every origin the browser touches identical and reachable:
+
+1. Forward **both** VM ports: `8123` (app) and `9443` (issuer).
+2. Browse to the app at exactly the `PIRATE_RADIO_PUBLIC_URL` origin. Set both
+   URLs to match how Cursor exposes the forward (before `serve` starts):
+   - `PIRATE_RADIO_PUBLIC_URL=http://localhost:8123`
+   - `PIRATE_RADIO_OIDC_ISSUER=https://localhost:9443`
+   Use `localhost` for both, or `127.0.0.1` for both — do not mix. (`env.sh`
+   reads these as overridable defaults.)
+3. Accept the issuer's self-signed cert once (untrusted CA; the VM side already
+   trusts it via `NODE_TLS_REJECT_UNAUTHORIZED=0`).
+
+Simplest alternative: log in from the browser **inside the VM** (the design
+assumption) — no forwarding and no cert prompt.
+
+Heavier alternative: point `PIRATE_RADIO_OIDC_ISSUER` / `_CLIENT_ID` /
+`_CLIENT_SECRET` at your real Authentik and register the forwarded app's
+`/auth/callback` as a redirect URI. That removes the self-signed local issuer
+entirely.
