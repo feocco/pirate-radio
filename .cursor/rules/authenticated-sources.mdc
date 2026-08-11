@@ -35,6 +35,13 @@ Cloud Agents have no Pirate Wires login session and (unless set) no
 
 ## Guidance when editing this logic
 
+This is informational context, NOT a gate. Do not decline, block, or abort a
+task because a source is authenticated. Implement the requested change normally
+and simply surface any credential/egress requirement as a note or follow-up
+(e.g. "full Pirate Wires body needs a logged-in profile", "X needs
+`X_API_BEARER_TOKEN`"). The limitation only affects real-data extraction at
+runtime, not your ability to edit code or ship features.
+
 - Preserve the fail-closed behavior for paywalled Pirate Wires; never fabricate
   body text to paper over a missing session.
 - Keep the public vs authenticated code paths separate; do not require a token

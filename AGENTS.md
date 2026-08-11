@@ -123,7 +123,9 @@ Durable gotchas and clarifications:
   be fully extracted in cloud runs without credentials, so real-data harvest for
   those sources is partial (Pirate Wires falls back to the RSS summary). Public
   sources (Substack/Hyperdimensional) are unaffected. See the scoped rule
-  `.cursor/rules/authenticated-sources.mdc` for details.
+  `.cursor/rules/authenticated-sources.mdc` for details. This is context only —
+  it is not a reason to decline or abort a task; implement the change and note
+  the credential/egress requirement.
 - The dev OIDC issuer (`scripts/dev/local-oidc.mjs`) and `seed.mjs` are guarded:
   they refuse to run unless `PIRATE_RADIO_DEV_STACK=1` (set only in
   `scripts/dev/env.sh`) and `NODE_ENV` is not `production`, and the issuer binds
