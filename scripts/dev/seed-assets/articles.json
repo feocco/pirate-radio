@@ -1,0 +1,44 @@
+[
+  {
+    "slug": "return-of-the-generalist-engineer",
+    "title": "The Quiet Return of the Generalist Engineer",
+    "author": "Mara Whitfield",
+    "sourceName": "Hyperdimensional",
+    "sourceType": "substack",
+    "url": "https://www.hyperdimensional.co/p/return-of-the-generalist-engineer",
+    "tagline": "Why breadth is beating depth again",
+    "publishedOffsetDays": 0,
+    "audio": "return-of-the-generalist-engineer.mp3",
+    "image": "return-of-the-generalist-engineer.jpg",
+    "progress": { "positionSeconds": 100, "durationSeconds": 100, "ended": true },
+    "text": "For a decade the industry rewarded specialization. Teams hired for one framework, one cloud, one narrow slice of the stack, and careers were built on going ever deeper into a single tool.\n\nThat tide is turning. As models absorb the rote parts of every specialty, the scarce skill is judgment across boundaries: knowing when a caching layer is the wrong answer, when a migration can wait, and when a small script beats a new service.\n\nThe best engineers I know right now are aggressively normal. They read the whole system before touching a line. They keep a running model of failure modes in their head. They treat the deploy pipeline as part of the product, not an afterthought.\n\nNone of this is nostalgia for a simpler time. It is a bet that the leverage has moved. When execution gets cheap, taste and context get expensive, and the generalist is the person who can supply both."
+  },
+  {
+    "slug": "regulators-discover-the-data-center",
+    "title": "Regulators Discover the Data Center",
+    "author": "Ryan Hassan",
+    "sourceName": "Pirate Wires",
+    "sourceType": "pirate-wires",
+    "url": "https://www.piratewires.com/p/regulators-discover-the-data-center",
+    "tagline": "A late arrival to a decade-old party",
+    "publishedOffsetDays": 2,
+    "audio": "regulators-discover-the-data-center.mp3",
+    "image": "regulators-discover-the-data-center.jpg",
+    "progress": { "positionSeconds": 42, "durationSeconds": 210, "ended": false },
+    "text": "The hearings started, as they always do, with a prop. A senator held up a hard drive and asked what a gigawatt was. Nobody in the room could answer without a staffer.\n\nBehind the theater there is a real fight. The buildout of compute has outrun the grid, and the people who approve transmission lines are not the people who approve chips. Two bureaucracies that never had to speak are now negotiating the future of the economy through each other.\n\nWhat is striking is how quickly the framing shifted from innovation to infrastructure. A year ago the story was models. Now it is substations, water rights, and interconnection queues that stretch past the end of the decade.\n\nThe companies that win the next phase will not be the ones with the cleverest architecture. They will be the ones who learned to file paperwork."
+  },
+  {
+    "slug": "notes-on-shipping-audio",
+    "title": "Notes on Shipping Software That Reads Itself Aloud",
+    "author": null,
+    "sourceName": "Custom Text",
+    "sourceType": "custom-text",
+    "url": "custom-text://local/notes-on-shipping-audio",
+    "tagline": null,
+    "publishedOffsetDays": 4,
+    "audio": "notes-on-shipping-audio.mp3",
+    "image": null,
+    "progress": null,
+    "text": "Turning articles into audio sounds simple until you try it. The text is never clean. Bylines hide in three different places. Section headings masquerade as paragraphs. A single stray pull-quote can double the runtime of a narration.\n\nThe trick is to be ruthless about what counts as the story. Title and body, nothing else. Everything cosmetic is noise that a listener cannot see and does not want to hear.\n\nOnce the text is honest, the rest is plumbing: chunk it under the model limit, stream the audio to disk, and record just enough metadata to rebuild the library without ever loading a media file into memory."
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "install": "bash scripts/dev/install.sh",
+  "start": "bash scripts/dev/start.sh",
+  "terminals": [
+    {
+      "name": "oidc",
+      "command": "node scripts/dev/local-oidc.mjs"
+    },
+    {
+      "name": "serve",
+      "command": "bash scripts/dev/serve.sh"
+    }
+  ]
+}
