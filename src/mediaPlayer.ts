@@ -135,16 +135,19 @@ export function renderMediaPlayerClient(userId?: string): string {
       const onPlay = () => {
         if (typeof player.initMediaSession === "function") player.initMediaSession();
       };
+      const onSeeked = () => saveProgress(track.slug, audio, true);
       audio.addEventListener("loadedmetadata", () => restoreProgress(track.slug, audio));
       audio.addEventListener("timeupdate", () => saveProgress(track.slug, audio));
       audio.addEventListener("pause", () => saveProgress(track.slug, audio, true));
       audio.addEventListener("ended", () => saveProgress(track.slug, audio, true, true));
+      audio.addEventListener("seeked", onSeeked);
       audio.addEventListener("play", onPlay);
       window.addEventListener("pagehide", onPageHide);
       function destroy() {
         saveProgress(track.slug, audio, true);
         window.removeEventListener("pagehide", onPageHide);
         audio.removeEventListener("play", onPlay);
+        audio.removeEventListener("seeked", onSeeked);
         clearTimeout(progressTimers.get(track.slug));
         progressTimers.delete(track.slug);
         player.destroy();

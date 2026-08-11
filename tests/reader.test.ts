@@ -190,6 +190,17 @@ describe("reader page", () => {
     expect(html).toContain("player.destroy()");
   });
 
+  test("persists progress immediately on seeked and removes the seeked listener on destroy", () => {
+    const client = renderMediaPlayerClient();
+    expect(client).toContain("const onSeeked = () => saveProgress(track.slug, audio, true)");
+    expect(client).toContain('audio.addEventListener("seeked", onSeeked)');
+    expect(client).toContain('audio.removeEventListener("seeked", onSeeked)');
+    const html = renderReaderHtml();
+    expect(html).toContain("const onSeeked = () => saveProgress(track.slug, audio, true)");
+    expect(html).toContain('audio.addEventListener("seeked", onSeeked)');
+    expect(html).toContain('audio.removeEventListener("seeked", onSeeked)');
+  });
+
   test("renders a compact account menu with central profile and native logout actions", () => {
     const html = renderReaderHtml(memberUser, "https://auth.example.com/if/user/#/settings");
 
