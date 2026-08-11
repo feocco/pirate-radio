@@ -21,7 +21,6 @@ export function mediaPlayerTrack(item: LibraryItem): MediaPlayerTrack {
   return track;
 }
 
-/** Serialize a track for embedding inside an inline <script> tag. */
 export function serializeMediaPlayerTrackForScript(track: MediaPlayerTrack): string {
   return JSON.stringify(track).replace(/[<>&\u2028\u2029]/g, (character) => {
     if (character === "<") return "\\u003c";
