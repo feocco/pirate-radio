@@ -118,6 +118,28 @@ describe("multi-user authorization and progress", () => {
     expect((await store.saveProgress(adminUser.id, "ended", 1, 100, true)).completedAt).toBeDefined();
   });
 
+  test("serves pinned Shikwasa vendor assets only from the authenticated allowlist", async () => {
+    const runtime = await testServer();
+    const script = await fetch(`${runtime.baseUrl}/vendor/shikwasa/shikwasa.iife.js`);
+    expect(script.status).toBe(200);
+    expect(script.headers.get("content-type")).toContain("text/javascript");
+    expect(await script.text()).toContain("Shikwasa");
+
+    const stylesheet = await fetch(`${runtime.baseUrl}/vendor/shikwasa/style.css`);
+    expect(stylesheet.status).toBe(200);
+    expect(stylesheet.headers.get("content-type")).toContain("text/css");
+    expect(await stylesheet.text()).toContain(".shk-player");
+
+    runtime.authenticator.principal = undefined;
+    expect((await fetch(`${runtime.baseUrl}/vendor/shikwasa/shikwasa.iife.js`)).status).toBe(401);
+    expect((await fetch(`${runtime.baseUrl}/vendor/shikwasa/style.css`)).status).toBe(401);
+
+    runtime.authenticator.principal = { user: memberUser, isAdmin: false };
+    expect((await fetch(`${runtime.baseUrl}/vendor/shikwasa/missing.js`)).status).toBe(404);
+    expect((await fetch(`${runtime.baseUrl}/vendor/shikwasa/../package.json`)).status).toBe(404);
+    expect((await fetch(`${runtime.baseUrl}/vendor/shikwasa/%2e%2e/package.json`)).status).toBe(404);
+  });
+
   test("keeps submitter snapshots and current attribution after IdP access disappears", async () => {
     const store = new MemoryStore();
     const submission = await store.createSubmission({ slug: "test", type: "url", submittedBy: memberUser });
