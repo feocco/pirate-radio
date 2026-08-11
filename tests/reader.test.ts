@@ -5,6 +5,11 @@ import {
   renderBacklogHtml,
   renderReaderHtml,
 } from "../src/reader.js";
+import {
+  mediaPlayerTrack,
+  renderMediaPlayerClient,
+  serializeMediaPlayerTrackForScript,
+} from "../src/mediaPlayer.js";
 import type { LibraryItem } from "../src/library.js";
 import type { Story } from "../src/types.js";
 import { adminUser, memberUser } from "./support/fakes.js";
@@ -49,15 +54,39 @@ describe("reader page", () => {
     audioBytes: 1024,
   };
 
-  test("renders an audio reader that persists playback position in localStorage", () => {
-    const html = renderReaderHtml();
-
-    expect(html).toContain('createElement("audio")');
-    expect(html).toContain("/library.json");
-    expect(html).toContain("localStorage");
+  function expectSharedPlayer(html: string) {
+    expect(html).toContain('/vendor/shikwasa/style.css');
+    expect(html).toContain('/vendor/shikwasa/shikwasa.iife.js');
+    expect(html).toContain("mountMediaPlayer");
+    expect(html).toContain('fixed: { type: "static" }');
+    expect(html).toContain('themeColor: "#58ad5c"');
+    expect(html).toContain("escapePlayerText(track.title)");
+    expect(html).toContain("escapePlayerText(track.sourceName)");
+    expect(html).toContain('url.startsWith("/images/")');
     expect(html).toContain("pirate-radio-position:");
     expect(html).toContain("/progress/");
     expect(html).toContain("saveProgress");
+    expect(html).toContain("setTimeout(write, 2500)");
+    expect(html).toContain("saveProgress(track.slug, audio, true, true)");
+    expect(html).toContain("typeof player.initMediaSession === \"function\"");
+    expect(html).toContain("player.initMediaSession()");
+    expect(html).toContain("function destroy()");
+    expect(html).toContain("player.destroy()");
+    expect(html).not.toContain('createElement("audio")');
+    expect(html).not.toContain("<audio");
+    expect(html).not.toContain('controls = true');
+    expect(html).not.toContain("skipButton");
+    expect(html).not.toContain("appendSkipControls");
+    expect(html).not.toContain(".skip-button");
+    expect(html).not.toContain("skipSeconds");
+  }
+
+  test("renders an audio reader that persists playback position in localStorage", () => {
+    const html = renderReaderHtml();
+
+    expectSharedPlayer(html);
+    expect(html).toContain("/library.json");
+    expect(html).toContain("localStorage");
     expect(html).toContain("source-filter");
     expect(html).toContain("sort-order");
     expect(html).toContain("filterLibraryItems");
@@ -65,8 +94,10 @@ describe("reader page", () => {
     expect(html).toContain("Newest conversion");
     expect(html).toContain("Article date");
     expect(html).toContain("item.imageUrl");
-    expect(html).toContain("player-controls");
-    expect(html).toContain("appendSkipControls(playerControls, audio, item.slug)");
+    expect(html).toContain("mountMediaPlayer(playerHost, mediaPlayerTrack(item))");
+    expect(html).toContain("libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item)))");
+    expect(html).toContain("destroyLibraryPlayers()");
+    expect(html).toContain("mounted.destroy()");
     expect(html).toContain('item.author ? "By " + item.author : ""');
     expect(html).toContain('"/article/" + encodeURIComponent(item.slug)');
     expect(html).toContain("downloadLink.download = item.slug + \".mp3\"");
@@ -84,27 +115,79 @@ describe("reader page", () => {
     expect(html).not.toContain("Culture");
   });
 
-  test("offers 10 second rewind and fast forward buttons on both players", () => {
-    for (const html of [renderReaderHtml(), renderArticleHtml(articleStory, articleItem)]) {
-      expect(html).toContain("const skipSeconds = 10");
-      expect(html).toContain('button.className = "skip-button"');
-      expect(html).toContain('button.dataset.skip = rewinds ? "back" : "forward"');
-      expect(html).toContain('(rewinds ? "- " : "+ ") + magnitude + "s"');
-      expect(html).toContain('(rewinds ? "Rewind " : "Fast forward ") + magnitude + " seconds"');
-      expect(html).toContain("skipButton(audio, slug, -skipSeconds), skipButton(audio, slug, skipSeconds)");
-      expect(html).toContain("audio.currentTime = Math.min(Math.max(audio.currentTime + deltaSeconds, 0), limit)");
-      expect(html).toContain("saveProgress(slug, audio, true)");
-      expect(html).toContain(".skip-button { min-width: 84px; min-height: 44px;");
-    }
+  test("uses the same Shikwasa mount and vendor assets on library and article pages", () => {
+    const libraryHtml = renderReaderHtml();
+    const articleHtml = renderArticleHtml(articleStory, articleItem);
+    expectSharedPlayer(libraryHtml);
+    expectSharedPlayer(articleHtml);
+    expect(articleHtml).toContain('id="article-player"');
+    expect(articleHtml).toContain("const { audio } = mountMediaPlayer(");
+    expect(articleHtml).toContain('"title":"The Test Story"');
+    expect(articleHtml).toContain('"sourceName":"Unknown Source"');
+    expect(articleHtml).toContain('"audioUrl":"/audio/test-story.mp3"');
+    expect(libraryHtml).toContain("mediaPlayerTrack(item)");
   });
 
-  test("binds arrow keys to the article player without hijacking form fields or native controls", () => {
-    const html = renderArticleHtml(articleStory, articleItem);
+  test("escapes hostile title and source metadata before Shikwasa innerHTML assignment", () => {
+    const hostile = "</script><img src=x onerror=alert(1)>";
+    const story: Story = {
+      ...articleStory,
+      title: hostile,
+      text: "Body",
+      contentBlocks: [{ type: "paragraph", text: "Body" }],
+    };
+    const item: LibraryItem = {
+      ...articleItem,
+      title: hostile,
+      sourceName: hostile,
+      imageUrl: "https://evil.example/cover.png",
+      hasAlignment: false,
+      alignmentUrl: undefined,
+    };
 
-    expect(html).toContain('appendSkipControls(document.getElementById("player-controls"), audio, slug)');
-    expect(html).toContain('if (event.key === "ArrowLeft") skipBy(audio, slug, -skipSeconds)');
-    expect(html).toContain('if (event.key === "ArrowRight") skipBy(audio, slug, skipSeconds)');
-    expect(html).toContain('event.target.closest?.("input, textarea, select, audio")');
+    const track = mediaPlayerTrack(item);
+    expect(track).toEqual({
+      slug: item.slug,
+      title: hostile,
+      sourceName: hostile,
+      audioUrl: item.audioUrl,
+    });
+    expect(track.coverUrl).toBeUndefined();
+
+    const serialized = serializeMediaPlayerTrackForScript(track);
+    expect(serialized).toContain("\\u003c/script\\u003e");
+    expect(serialized).toContain("\\u003cimg");
+    expect(serialized).not.toContain("</script>");
+    expect(serialized).not.toContain("<img");
+    expect(JSON.parse(serialized)).toEqual(track);
+
+    const html = renderArticleHtml(story, item);
+    expect(html).toContain(serialized);
+    expect(html).not.toContain(hostile);
+    expect(html).not.toContain("</script><img");
+    expect(html).toContain("const title = escapePlayerText(track.title)");
+    expect(html).toContain("const artist = escapePlayerText(track.sourceName)");
+    expect(html).toContain("trustedCoverUrl(track.coverUrl)");
+    expect(html).not.toContain(`title: "${hostile}"`);
+    expect(html).not.toContain(`artist: "${hostile}"`);
+    expect(renderMediaPlayerClient()).toContain("escapePlayerText(track.title)");
+  });
+
+  test("destroys library players before sort or filter rerenders and reactivates media session on play", () => {
+    const html = renderReaderHtml();
+    expect(html).toContain("let libraryPlayers = []");
+    expect(html).toContain("function destroyLibraryPlayers()");
+    expect(html).toContain("for (const mounted of libraryPlayers)");
+    expect(html).toContain("mounted.destroy()");
+    expect(html).toContain("libraryPlayers = []");
+    expect(html).toContain("destroyLibraryPlayers();\n      root.textContent = \"\"");
+    expect(html).toContain("libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item)))");
+    expect(html).toContain("audio.addEventListener(\"play\", onPlay)");
+    expect(html).toContain("if (typeof player.initMediaSession === \"function\") player.initMediaSession()");
+    expect(html).toContain("window.removeEventListener(\"pagehide\", onPageHide)");
+    expect(html).toContain("clearTimeout(progressTimers.get(track.slug))");
+    expect(html).toContain("progressTimers.delete(track.slug)");
+    expect(html).toContain("player.destroy()");
   });
 
   test("renders a compact account menu with central profile and native logout actions", () => {
@@ -177,6 +260,8 @@ describe("reader page", () => {
 
     expect(html).toContain("Hyperdimensional");
     expect(html).toContain("By Dean W. Ball");
+    expect(html).toContain('"sourceName":"Hyperdimensional"');
+    expect(html).toContain('"title":"What Should Be Done"');
   });
 
   test("renders an admin page with the admin nav tab active", () => {
@@ -205,6 +290,8 @@ describe("reader page", () => {
     expect(html).toContain('download="test-story.mp3"');
     expect(html).toContain("Download MP3");
     expect(html).toContain("/alignment/test-story.json");
+    expect(html).toContain("const { audio } = mountMediaPlayer(");
+    expect(html).toContain("audio.addEventListener(\"timeupdate\"");
     expect(html).toContain("data-word-index");
     expect(html).toContain("A Section");
     expect(html).toContain(">First</span>");

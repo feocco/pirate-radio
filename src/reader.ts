@@ -1,5 +1,11 @@
 import type { LibraryItem } from "./library.js";
 import type { ApplicationUser } from "./identity.js";
+import {
+  mediaPlayerTrack,
+  renderMediaPlayerAssets,
+  renderMediaPlayerClient,
+  serializeMediaPlayerTrackForScript,
+} from "./mediaPlayer.js";
 import type { Story, StoryContentBlock } from "./types.js";
 
 const sharedCss = `
@@ -45,10 +51,7 @@ const sharedCss = `
   .item h2 { font-size: clamp(31px, 4.8vw, 58px); font-weight: 950; }
   .meta { color: var(--muted); font-size: 14px; font-weight: 700; margin: 8px 0 12px; }
   .tagline { font-size: 18px; max-width: 820px; margin: 0 0 16px; }
-  audio { width: 100%; display: block; margin-top: 14px; }
-  .player-controls { display: flex; gap: 10px; margin-top: 10px; }
-  .skip-button { min-width: 84px; min-height: 44px; padding: 0 14px; border: 2px solid var(--line); background: #fff; color: var(--ink); font: inherit; font-weight: 900; cursor: pointer; }
-  .skip-button:hover, .skip-button:focus-visible { background: var(--accent); outline: none; }
+  .media-player { margin-top: 14px; }
   .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
   .readlink, .button { display: inline-block; background: #000; color: #fff; text-decoration: none; padding: 9px 13px; font-weight: 900; border: 1px solid #000; font: inherit; cursor: pointer; }
   .danger-form { display: inline-block; margin: 0; }
@@ -108,37 +111,6 @@ const sharedCss = `
   }
 `;
 
-const SKIP_SECONDS = 10;
-
-// Shared by both players; each page supplies its own `saveProgress` from scope.
-const skipScript = `
-    const skipSeconds = ${SKIP_SECONDS};
-
-    function skipBy(audio, slug, deltaSeconds) {
-      if (!Number.isFinite(audio.currentTime)) return;
-      const limit = Number.isFinite(audio.duration) ? audio.duration : Number.MAX_SAFE_INTEGER;
-      audio.currentTime = Math.min(Math.max(audio.currentTime + deltaSeconds, 0), limit);
-      saveProgress(slug, audio, true);
-    }
-
-    function skipButton(audio, slug, deltaSeconds) {
-      const rewinds = deltaSeconds < 0;
-      const magnitude = Math.abs(deltaSeconds);
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "skip-button";
-      button.dataset.skip = rewinds ? "back" : "forward";
-      button.textContent = (rewinds ? "- " : "+ ") + magnitude + "s";
-      button.setAttribute("aria-label", (rewinds ? "Rewind " : "Fast forward ") + magnitude + " seconds");
-      button.addEventListener("click", () => skipBy(audio, slug, deltaSeconds));
-      return button;
-    }
-
-    function appendSkipControls(container, audio, slug) {
-      container.append(skipButton(audio, slug, -skipSeconds), skipButton(audio, slug, skipSeconds));
-    }
-`;
-
 export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: string): string {
   return `<!doctype html>
 <html lang="en">
@@ -146,6 +118,7 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pirate Radio</title>
+  ${renderMediaPlayerAssets()}
   <style>${sharedCss}</style>
 </head>
 <body>
@@ -165,58 +138,14 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
     const root = document.getElementById("library");
     const sourceFilter = document.getElementById("source-filter");
     const sortOrder = document.getElementById("sort-order");
-    const keyFor = (slug) => "pirate-radio-position:${user?.id ?? "anonymous"}:" + slug;
-    const progressTimers = new Map();
     let libraryItems = [];
+    let libraryPlayers = [];
 
     function text(value) {
       return value == null ? "" : String(value);
     }
 
-    function applySavedProgress(audio, value) {
-      const saved = Number(value || 0);
-      if (Number.isFinite(saved) && saved > 0 && saved < audio.duration) {
-        audio.currentTime = saved;
-        return true;
-      }
-      return false;
-    }
-
-    async function restoreProgress(slug, audio) {
-      try {
-        const response = await fetch("/progress/" + encodeURIComponent(slug), { cache: "no-store" });
-        if (response.ok) {
-          const progress = await response.json();
-          if (applySavedProgress(audio, progress.positionSeconds)) return;
-        }
-      } catch {}
-      applySavedProgress(audio, localStorage.getItem(keyFor(slug)));
-    }
-
-    function saveProgress(slug, audio, immediate = false, ended = false) {
-      if (!Number.isFinite(audio.currentTime)) return;
-      localStorage.setItem(keyFor(slug), String(audio.currentTime));
-      clearTimeout(progressTimers.get(slug));
-      const write = () => {
-        fetch("/progress/" + encodeURIComponent(slug), {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          keepalive: immediate,
-          body: JSON.stringify({
-            positionSeconds: audio.currentTime,
-            durationSeconds: Number.isFinite(audio.duration) ? audio.duration : undefined,
-            ended,
-          }),
-        }).catch(() => {});
-      };
-      if (immediate) {
-        write();
-      } else {
-        progressTimers.set(slug, setTimeout(write, 2500));
-      }
-    }
-
-    ${skipScript}
+    ${renderMediaPlayerClient(user?.id)}
     function timestamp(value) {
       const parsed = Date.parse(value || "");
       return Number.isFinite(parsed) ? parsed : 0;
@@ -260,7 +189,15 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
       return sorted;
     }
 
+    function destroyLibraryPlayers() {
+      for (const mounted of libraryPlayers) {
+        mounted.destroy();
+      }
+      libraryPlayers = [];
+    }
+
     function renderLibrary() {
+      destroyLibraryPlayers();
       root.textContent = "";
       const visibleItems = sortLibraryItems(filterLibraryItems(libraryItems));
       if (visibleItems.length === 0) {
@@ -312,22 +249,13 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
       downloadLink.href = item.audioUrl;
       downloadLink.download = item.slug + ".mp3";
       downloadLink.textContent = "Download MP3";
-      const audio = document.createElement("audio");
-      audio.controls = true;
-      audio.preload = "metadata";
-      audio.src = item.audioUrl;
-      audio.addEventListener("loadedmetadata", () => restoreProgress(item.slug, audio));
-      audio.addEventListener("timeupdate", () => saveProgress(item.slug, audio));
-      audio.addEventListener("pause", () => saveProgress(item.slug, audio, true));
-      audio.addEventListener("ended", () => saveProgress(item.slug, audio, true, true));
-      window.addEventListener("pagehide", () => saveProgress(item.slug, audio, true));
-      const playerControls = document.createElement("div");
-      playerControls.className = "player-controls";
-      appendSkipControls(playerControls, audio, item.slug);
+      const playerHost = document.createElement("div");
+      playerHost.className = "media-player";
+      libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item)));
       actions.append(readLink, downloadLink);
       content.append(heading, meta);
       if (item.tagline) content.append(tagline);
-      content.append(actions, audio, playerControls);
+      content.append(actions, playerHost);
       section.append(image, content);
       root.append(section);
     }
@@ -627,6 +555,7 @@ export function renderArticleHtml(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(story.title)} - Pirate Radio</title>
+  ${renderMediaPlayerAssets()}
   <style>${sharedCss}</style>
 </head>
 <body>
@@ -650,76 +579,18 @@ export function renderArticleHtml(
       <a class="readlink" href="/">Library</a>
       <a class="readlink" href="${escapeAttribute(item.audioUrl)}" download="${escapeAttribute(item.slug)}.mp3">Download MP3</a>
       ${identity.isAdmin ? `<form class="danger-form" method="post" action="${escapeAttribute(`/admin/articles/${encodeURIComponent(item.slug)}/delete`)}" onsubmit="return window.confirm('Delete this article? A recoverable archive will be kept.');"><button class="button danger-button" type="submit">Delete article</button></form>` : ""}
-      <audio id="article-audio" controls preload="metadata" src="${escapeAttribute(item.audioUrl)}"></audio>
-      <div class="player-controls" id="player-controls"></div>
+      <div id="article-player" class="media-player"></div>
     </section>
     <section class="body" id="story-body">
       ${blocks.map(renderBlock).join("\n")}
     </section>
   </article>
   <script>
-    const slug = ${JSON.stringify(item.slug)};
-    const keyFor = (slug) => "pirate-radio-position:${identity.user?.id ?? "anonymous"}:" + slug;
-    let progressTimer;
-    const audio = document.getElementById("article-audio");
-
-    function applySavedProgress(audio, value) {
-      const saved = Number(value || 0);
-      if (Number.isFinite(saved) && saved > 0 && saved < audio.duration) {
-        audio.currentTime = saved;
-        return true;
-      }
-      return false;
-    }
-
-    async function restoreProgress(slug, audio) {
-      try {
-        const response = await fetch("/progress/" + encodeURIComponent(slug), { cache: "no-store" });
-        if (response.ok) {
-          const progress = await response.json();
-          if (applySavedProgress(audio, progress.positionSeconds)) return;
-        }
-      } catch {}
-      applySavedProgress(audio, localStorage.getItem(keyFor(slug)));
-    }
-
-    function saveProgress(slug, audio, immediate = false, ended = false) {
-      if (!Number.isFinite(audio.currentTime)) return;
-      localStorage.setItem(keyFor(slug), String(audio.currentTime));
-      clearTimeout(progressTimer);
-      const write = () => {
-        fetch("/progress/" + encodeURIComponent(slug), {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          keepalive: immediate,
-          body: JSON.stringify({
-            positionSeconds: audio.currentTime,
-            durationSeconds: Number.isFinite(audio.duration) ? audio.duration : undefined,
-            ended,
-          }),
-        }).catch(() => {});
-      };
-      if (immediate) {
-        write();
-      } else {
-        progressTimer = setTimeout(write, 2500);
-      }
-    }
-
-    ${skipScript}
-    appendSkipControls(document.getElementById("player-controls"), audio, slug);
-    document.addEventListener("keydown", (event) => {
-      // Native controls already seek with arrow keys while the player itself is focused.
-      if (event.target.closest?.("input, textarea, select, audio")) return;
-      if (event.key === "ArrowLeft") skipBy(audio, slug, -skipSeconds);
-      if (event.key === "ArrowRight") skipBy(audio, slug, skipSeconds);
-    });
-
-    audio.addEventListener("loadedmetadata", () => restoreProgress(slug, audio));
-    audio.addEventListener("timeupdate", () => saveProgress(slug, audio));
-    audio.addEventListener("pause", () => saveProgress(slug, audio, true));
-    audio.addEventListener("ended", () => saveProgress(slug, audio, true, true));
-    window.addEventListener("pagehide", () => saveProgress(slug, audio, true));
+    ${renderMediaPlayerClient(identity.user?.id)}
+    const { audio } = mountMediaPlayer(
+      document.getElementById("article-player"),
+      ${serializeMediaPlayerTrackForScript(mediaPlayerTrack(item))},
+    );
     ${item.hasAlignment && item.alignmentUrl ? renderAlignmentScript(item.alignmentUrl) : ""}
   </script>
 </body>
