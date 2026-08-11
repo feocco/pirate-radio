@@ -10,6 +10,45 @@ import type { Story } from "../src/types.js";
 import { adminUser, memberUser } from "./support/fakes.js";
 
 describe("reader page", () => {
+  const articleStory: Story = {
+    sourceUrl: "https://www.piratewires.com/p/test-story",
+    title: "The Test Story",
+    tagline: "A sharp test tagline.",
+    heroImageOriginalUrl: "https://cdn.example.com/original.png",
+    heroImageUrl: "/images/test-story.png",
+    sectionTitles: ["A Section"],
+    contentBlocks: [
+      { type: "heading", text: "A Section" },
+      { type: "paragraph", text: "First paragraph." },
+    ],
+    text: "A Section\n\nFirst paragraph.",
+    wordCount: 4,
+    characterCount: 27,
+    extractedAt: "2026-06-23T01:00:00.000Z",
+  };
+  const articleItem: LibraryItem = {
+    slug: "test-story",
+    title: articleStory.title,
+    sourceUrl: articleStory.sourceUrl,
+    publishedAt: "Tue, 23 Jun 2026 12:00:00 GMT",
+    generatedAt: "2026-06-23T12:01:00.000Z",
+    audioPath: "/data/library/audio/test-story.mp3",
+    audioUrl: "/audio/test-story.mp3",
+    jsonPath: "/data/library/stories/test-story.json",
+    textPath: "/data/library/text/test-story.txt",
+    imagePath: "/data/library/images/test-story.png",
+    imageUrl: "/images/test-story.png",
+    alignmentPath: "/data/library/alignment/test-story.json",
+    alignmentUrl: "/alignment/test-story.json",
+    hasAlignment: true,
+    tagline: articleStory.tagline,
+    sectionTitles: articleStory.sectionTitles,
+    estimatedCostUsd: 0.01,
+    wordCount: articleStory.wordCount,
+    characterCount: articleStory.characterCount,
+    audioBytes: 1024,
+  };
+
   test("renders an audio reader that persists playback position in localStorage", () => {
     const html = renderReaderHtml();
 
@@ -26,6 +65,8 @@ describe("reader page", () => {
     expect(html).toContain("Newest conversion");
     expect(html).toContain("Article date");
     expect(html).toContain("item.imageUrl");
+    expect(html).toContain("player-controls");
+    expect(html).toContain("appendSkipControls(playerControls, audio, item.slug)");
     expect(html).toContain('item.author ? "By " + item.author : ""');
     expect(html).toContain('"/article/" + encodeURIComponent(item.slug)');
     expect(html).toContain("downloadLink.download = item.slug + \".mp3\"");
@@ -41,6 +82,29 @@ describe("reader page", () => {
     expect(html).toContain('<a class="brandlink active" href="/" aria-label="Pirate Radio home">');
     expect(html).not.toContain('href="/">Pirate Wires</a>');
     expect(html).not.toContain("Culture");
+  });
+
+  test("offers 10 second rewind and fast forward buttons on both players", () => {
+    for (const html of [renderReaderHtml(), renderArticleHtml(articleStory, articleItem)]) {
+      expect(html).toContain("const skipSeconds = 10");
+      expect(html).toContain('button.className = "skip-button"');
+      expect(html).toContain('button.dataset.skip = rewinds ? "back" : "forward"');
+      expect(html).toContain('(rewinds ? "- " : "+ ") + magnitude + "s"');
+      expect(html).toContain('(rewinds ? "Rewind " : "Fast forward ") + magnitude + " seconds"');
+      expect(html).toContain("skipButton(audio, slug, -skipSeconds), skipButton(audio, slug, skipSeconds)");
+      expect(html).toContain("audio.currentTime = Math.min(Math.max(audio.currentTime + deltaSeconds, 0), limit)");
+      expect(html).toContain("saveProgress(slug, audio, true)");
+      expect(html).toContain(".skip-button { min-width: 84px; min-height: 44px;");
+    }
+  });
+
+  test("binds arrow keys to the article player without hijacking form fields or native controls", () => {
+    const html = renderArticleHtml(articleStory, articleItem);
+
+    expect(html).toContain('appendSkipControls(document.getElementById("player-controls"), audio, slug)');
+    expect(html).toContain('if (event.key === "ArrowLeft") skipBy(audio, slug, -skipSeconds)');
+    expect(html).toContain('if (event.key === "ArrowRight") skipBy(audio, slug, skipSeconds)');
+    expect(html).toContain('event.target.closest?.("input, textarea, select, audio")');
   });
 
   test("renders a compact account menu with central profile and native logout actions", () => {
@@ -127,44 +191,8 @@ describe("reader page", () => {
   });
 
   test("renders a dedicated article page with image, audio, text blocks, and optional alignment", () => {
-    const story: Story = {
-      sourceUrl: "https://www.piratewires.com/p/test-story",
-      title: "The Test Story",
-      tagline: "A sharp test tagline.",
-      heroImageOriginalUrl: "https://cdn.example.com/original.png",
-      heroImageUrl: "/images/test-story.png",
-      sectionTitles: ["A Section"],
-      contentBlocks: [
-        { type: "heading", text: "A Section" },
-        { type: "paragraph", text: "First paragraph." },
-      ],
-      text: "A Section\n\nFirst paragraph.",
-      wordCount: 4,
-      characterCount: 27,
-      extractedAt: "2026-06-23T01:00:00.000Z",
-    };
-    const item: LibraryItem = {
-      slug: "test-story",
-      title: story.title,
-      sourceUrl: story.sourceUrl,
-      publishedAt: "Tue, 23 Jun 2026 12:00:00 GMT",
-      generatedAt: "2026-06-23T12:01:00.000Z",
-      audioPath: "/data/library/audio/test-story.mp3",
-      audioUrl: "/audio/test-story.mp3",
-      jsonPath: "/data/library/stories/test-story.json",
-      textPath: "/data/library/text/test-story.txt",
-      imagePath: "/data/library/images/test-story.png",
-      imageUrl: "/images/test-story.png",
-      alignmentPath: "/data/library/alignment/test-story.json",
-      alignmentUrl: "/alignment/test-story.json",
-      hasAlignment: true,
-      tagline: story.tagline,
-      sectionTitles: story.sectionTitles,
-      estimatedCostUsd: 0.01,
-      wordCount: story.wordCount,
-      characterCount: story.characterCount,
-      audioBytes: 1024,
-    };
+    const story = articleStory;
+    const item = articleItem;
 
     const html = renderArticleHtml(story, item);
 
