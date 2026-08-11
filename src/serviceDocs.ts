@@ -537,6 +537,38 @@ const pirateRadioOpenApi = {
         },
       },
     },
+    "/vendor/shikwasa/shikwasa.iife.js": {
+      get: {
+        tags: ["library"],
+        summary: "Serve the authenticated Shikwasa player script",
+        responses: {
+          "200": {
+            description: "Pinned Shikwasa IIFE build.",
+            content: { "text/javascript": { schema: { type: "string" } } },
+          },
+          "401": {
+            description: "Missing application session.",
+            content: { "application/json": { schema: { type: "object" } } },
+          },
+        },
+      },
+    },
+    "/vendor/shikwasa/style.css": {
+      get: {
+        tags: ["library"],
+        summary: "Serve the authenticated Shikwasa stylesheet",
+        responses: {
+          "200": {
+            description: "Pinned Shikwasa stylesheet.",
+            content: { "text/css": { schema: { type: "string" } } },
+          },
+          "401": {
+            description: "Missing application session.",
+            content: { "application/json": { schema: { type: "object" } } },
+          },
+        },
+      },
+    },
     "/audio/{filename}": {
       get: {
         tags: ["library"],
@@ -657,6 +689,8 @@ const endpointDocs: EndpointDoc[] = [
   { method: "GET, HEAD", path: "/audio/{filename}", description: "Serve generated MP3 audio with range support." },
   { method: "GET", path: "/images/{filename}", description: "Serve cached article art from the local library." },
   { method: "GET", path: "/alignment/{filename}", description: "Serve optional word-alignment JSON when available." },
+  { method: "GET", path: "/vendor/shikwasa/shikwasa.iife.js", description: "Authenticated Shikwasa player script." },
+  { method: "GET", path: "/vendor/shikwasa/style.css", description: "Authenticated Shikwasa stylesheet." },
 ];
 
 function escapeHtml(value: string): string {

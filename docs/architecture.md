@@ -49,6 +49,8 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/alignment.ts`: optional OpenAI Whisper word-timing artifact writer.
 - `src/tts/`: provider interface and OpenAI implementation.
 - `src/library.ts`: durable manifest writer.
+- `src/mediaPlayer.ts`: shared Shikwasa media player for library and article
+  views, including metadata escaping and playback-progress wiring.
 - `src/progress.ts`: legacy JSON reader used only for cutover and rollback.
 - `src/reader.ts`: library and article-page renderer with server-backed
   playback-position sync, plus the RSS queue page.

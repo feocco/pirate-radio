@@ -1,7 +1,8 @@
 import { createReadStream } from "node:fs";
 import { access, mkdir, readFile, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { basename, join, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { basename, dirname, join, resolve } from "node:path";
 import { contentTypeForAsset } from "./assets.js";
 import { buildBacklogItems, queueBacklogConversion, queueBacklogUrlConversion } from "./backlog.js";
 import { filterVoiceExcludedLibraryManifest } from "./articleFilters.js";
@@ -40,6 +41,15 @@ import {
 } from "./workflow.js";
 
 const MAX_JSON_BODY_CHARS = 128_000;
+
+const shikwasaDistDir = dirname(createRequire(import.meta.url).resolve("shikwasa"));
+const SHIKWASA_VENDOR_ASSETS = new Map<string, { fileName: string; contentType: string }>([
+  [
+    "/vendor/shikwasa/shikwasa.iife.js",
+    { fileName: "shikwasa.iife.js", contentType: "text/javascript; charset=utf-8" },
+  ],
+  ["/vendor/shikwasa/style.css", { fileName: "style.css", contentType: "text/css; charset=utf-8" }],
+]);
 
 export interface PirateRadioServiceOptions {
   config: PirateRadioConfig;
@@ -293,6 +303,22 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
     }
     if (adminPath(url.pathname) && !principal.isAdmin) {
       json(response, 403, { error: "admin_required" });
+      return;
+    }
+    if (request.method === "GET" && url.pathname.startsWith("/vendor/shikwasa/")) {
+      const asset = SHIKWASA_VENDOR_ASSETS.get(url.pathname);
+      if (!asset) {
+        json(response, 404, { error: "not_found" });
+        return;
+      }
+      const filePath = join(shikwasaDistDir, asset.fileName);
+      const body = await readFile(filePath);
+      response.writeHead(200, {
+        "content-type": asset.contentType,
+        "content-length": String(body.byteLength),
+        "cache-control": "private, max-age=86400",
+      });
+      response.end(body);
       return;
     }
     if (request.method === "GET" && url.pathname === "/docs") {
