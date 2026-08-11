@@ -59,6 +59,10 @@ registration separately.
 
 ## Cursor Cloud specific instructions
 
+For the environment structure, the one-time dashboard settings (Network Access
+allowlist + secrets), and the build/run lifecycle, see
+[docs/cloud-agents.md](docs/cloud-agents.md).
+
 The cloud dev stack is defined in `.cursor/environment.json` + `scripts/dev/`
 (all dev-only; never used by the homelab runtime):
 
