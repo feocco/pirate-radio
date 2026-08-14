@@ -141,6 +141,9 @@ describe("media player client cast wiring", () => {
     expect(client).toContain("audio.disableRemotePlayback = false");
     expect(client).toContain("detachCast()");
     expect(client).toContain("window.dispatchEvent(new Event(\"resize\"))");
+    expect(client).toContain("button.innerHTML");
+    expect(client).toContain("svg aria-hidden=");
+    expect(client).not.toContain("CAST_ICON");
     expect(client).not.toContain("/cast");
     expect(client).not.toContain("cast=");
   });

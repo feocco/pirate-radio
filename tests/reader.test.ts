@@ -76,6 +76,8 @@ describe("reader page", () => {
     expect(html).toContain(".media-player { margin-top: 14px; width: 100%; max-width: 100%; min-width: 0; }");
     expect(html).toContain(".media-player .shk { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }");
     expect(html).toContain(".media-player .shk-controls { max-width: 100%; }");
+    expect(html).toContain(".item, .item > *, .player-panel { min-width: 0; max-width: 100%; }");
+    expect(html).toContain(".wrap { width: min(1180px, calc(100% - 32px)); max-width: 100%; margin: 0 auto; }");
     expect(html).toContain("function destroy()");
     expect(html).toContain("player.destroy()");
     expect(html).not.toContain('createElement("audio")');
