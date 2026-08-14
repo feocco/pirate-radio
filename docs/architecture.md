@@ -50,7 +50,13 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/tts/`: provider interface and OpenAI implementation.
 - `src/library.ts`: durable manifest writer.
 - `src/mediaPlayer.ts`: shared Shikwasa media player for library and article
-  views, including metadata escaping and playback-progress wiring.
+  views, including metadata escaping, playback-progress wiring, and a Cast
+  control that uses the audio element's Remote Playback API.
+- `src/mediaPlayerCast.ts`: Cast button for Shikwasa's extra-controls menu.
+  It stays hidden until Chrome reports a receiver. The player stays `fixed:
+  static` so library pages do not pin every card to the viewport; width is
+  constrained to the container so Shikwasa's own 640px layout and resize
+  marquee can shrink on a phone.
 - `src/progress.ts`: legacy JSON reader used only for cutover and rollback.
 - `src/reader.ts`: library and article-page renderer with server-backed
   playback-position sync, plus the RSS queue page.

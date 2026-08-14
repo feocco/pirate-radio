@@ -70,6 +70,12 @@ describe("reader page", () => {
     expect(html).toContain("saveProgress(track.slug, audio, true, true)");
     expect(html).toContain("typeof player.initMediaSession === \"function\"");
     expect(html).toContain("player.initMediaSession()");
+    expect(html).toContain("audio.disableRemotePlayback = false");
+    expect(html).toContain("function attachCastControl");
+    expect(html).toContain("window.dispatchEvent(new Event(\"resize\"))");
+    expect(html).toContain(".media-player { margin-top: 14px; width: 100%; max-width: 100%; min-width: 0; }");
+    expect(html).toContain(".media-player .shk { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }");
+    expect(html).toContain(".media-player .shk-controls { max-width: 100%; }");
     expect(html).toContain("function destroy()");
     expect(html).toContain("player.destroy()");
     expect(html).not.toContain('createElement("audio")');

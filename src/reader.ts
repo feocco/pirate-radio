@@ -51,7 +51,12 @@ const sharedCss = `
   .item h2 { font-size: clamp(31px, 4.8vw, 58px); font-weight: 950; }
   .meta { color: var(--muted); font-size: 14px; font-weight: 700; margin: 8px 0 12px; }
   .tagline { font-size: 18px; max-width: 820px; margin: 0 0 16px; }
-  .media-player { margin-top: 14px; }
+  .media-player { margin-top: 14px; width: 100%; max-width: 100%; min-width: 0; }
+  .media-player .shk { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+  .media-player .shk-player, .media-player .shk-body { max-width: 100%; min-width: 0; }
+  .media-player .shk-text { min-width: 0; }
+  .media-player .shk-controls { max-width: 100%; }
+  .item, .player-panel { min-width: 0; }
   .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
   .readlink, .button { display: inline-block; background: #000; color: #fff; text-decoration: none; padding: 9px 13px; font-weight: 900; border: 1px solid #000; font: inherit; cursor: pointer; }
   .danger-form { display: inline-block; margin: 0; }
