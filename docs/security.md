@@ -39,7 +39,11 @@ Self-hosted Shikwasa assets are served only from the fixed authenticated paths
 `/vendor/shikwasa/shikwasa.iife.js` and `/vendor/shikwasa/style.css`. There is no
 generic static-file route. The shared media player escapes title and source name
 before handing them to Shikwasa, which assigns those fields with `innerHTML`, and
-accepts cover art only when the URL starts with `/images/`.
+accepts cover art only when the URL starts with `/images/`. The Cast control
+uses the audio element's Remote Playback API and does not add an
+unauthenticated audio URL; Chromecast receivers that fetch `/audio/*`
+themselves still need the application session, so Nest playback from this
+button depends on the browser remoting the already-authenticated stream.
 
 Article deletion is an Origin-validated administrator action. It removes an
 item from the active library only after copying its manifest record and

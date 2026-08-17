@@ -1,4 +1,5 @@
 import type { LibraryItem } from "./library.js";
+import { attachCastControl } from "./mediaPlayerCast.js";
 
 export interface MediaPlayerTrack {
   slug: string;
@@ -130,6 +131,9 @@ export function renderMediaPlayerClient(userId?: string): string {
         },
       });
       const audio = player.audio;
+      audio.disableRemotePlayback = false;
+      ${attachCastControl.toString()}
+      const detachCast = attachCastControl(player);
       const onPageHide = () => saveProgress(track.slug, audio, true);
       const onPlay = () => {
         if (typeof player.initMediaSession === "function") player.initMediaSession();
@@ -142,11 +146,13 @@ export function renderMediaPlayerClient(userId?: string): string {
       audio.addEventListener("seeked", onSeeked);
       audio.addEventListener("play", onPlay);
       window.addEventListener("pagehide", onPageHide);
+      requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
       function destroy() {
         saveProgress(track.slug, audio, true);
         window.removeEventListener("pagehide", onPageHide);
         audio.removeEventListener("play", onPlay);
         audio.removeEventListener("seeked", onSeeked);
+        detachCast();
         clearTimeout(progressTimers.get(track.slug));
         progressTimers.delete(track.slug);
         player.destroy();
