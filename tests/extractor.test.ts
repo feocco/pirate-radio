@@ -57,4 +57,52 @@ describe("extractStoryFromHtml", () => {
     expect(story.text).not.toContain("Subscribe now");
     expect(story.text).not.toContain("This is a reader comment.");
   });
+
+  test("extracts WSJ subscriber markup and ignores chrome plus JSON-LD fallback", async () => {
+    const html = await readFile("tests/fixtures/wsj-story.html", "utf8");
+
+    const story = extractStoryFromHtml(
+      html,
+      "https://www.wsj.com/tech/steve-jobs-apple-next-cia-161b65f9",
+    );
+
+    expect(story.title).toBe("Steve Jobs, Apple and the CIA");
+    expect(story.author).toBe("Joanna Stern");
+    expect(story.tagline).toBe("How a secretive computing project connected Cupertino and Langley.");
+    expect(story.heroImageOriginalUrl).toBe("https://images.wsj.net/im-hero.jpg");
+    expect(story.sectionTitles).toEqual(["The Next Chapter"]);
+    expect(story.text).toBe(
+      [
+        "Preferred WSJ body paragraph one about Next and intelligence work.",
+        "The Next Chapter",
+        "Preferred WSJ body paragraph two with the reported history.",
+        "A quoted line from the article.",
+      ].join("\n\n"),
+    );
+    expect(story.text).not.toContain("JSON-LD fallback paragraph");
+    expect(story.text).not.toContain("Related teaser");
+    expect(story.text).not.toContain("Subscribe to continue reading");
+  });
+
+  test("falls back to NewsArticle JSON-LD when HTML body containers are empty", () => {
+    const html = `
+      <html>
+        <head>
+          <meta property="og:title" content="JSON-LD Only Story">
+          <script type="application/ld+json">
+            {"@type":"NewsArticle","articleBody":"First sourced paragraph.\\n\\nSecond sourced paragraph."}
+          </script>
+        </head>
+        <body><p>Subscribe</p></body>
+      </html>
+    `;
+
+    const story = extractStoryFromHtml(html, "https://www.wsj.com/articles/json-ld-only");
+
+    expect(story.title).toBe("JSON-LD Only Story");
+    expect(story.contentBlocks).toEqual([
+      { type: "paragraph", text: "First sourced paragraph." },
+      { type: "paragraph", text: "Second sourced paragraph." },
+    ]);
+  });
 });

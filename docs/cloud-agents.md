@@ -110,8 +110,10 @@ Cross-cutting:
 - To refresh with real articles: on a freshly-booted agent (feed domains now
   allowlisted) run `node scripts/dev/harvest.mjs` to regenerate the fixtures
   from live RSS, then commit them.
-- Authenticated sources (Pirate Wires paywall, X) stay limited without
-  credentials — see `.cursor/rules/authenticated-sources.mdc`.
+- Authenticated sources (Pirate Wires paywall, WSJ paywall, X) stay limited
+  without credentials — see `.cursor/rules/authenticated-sources.mdc`.
+  `www.wsj.com` is not on the Cloud Agent allowlist, so live WSJ conversion
+  belongs on the homelab host with a subscriber Playwright session.
 
 ## 6. Logging in from your local machine (port forwarding)
 

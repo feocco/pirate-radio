@@ -33,7 +33,7 @@ export function extractStoryFromHtml(html: string, sourceUrl: string): Story {
     .replace(/<[^>]+\bdata-component-name=["']SubscribeWidget["'][\s\S]*?<\/div>/gi, "")
     .replace(/<[^>]+\bclass=["'][^"']*(?:comments|subscribe-widget|subscription-widget)[^"']*["'][\s\S]*?<\/div>/gi, "");
 
-  const contentBlocks = Array.from(
+  let contentBlocks = Array.from(
     bodyHtml.matchAll(/<(p|h2|h3|h4|li|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/gi),
     (match): StoryContentBlock | undefined => {
       const text = cleanText(match[2] ?? "");
@@ -43,6 +43,10 @@ export function extractStoryFromHtml(html: string, sourceUrl: string): Story {
       return { type: blockType(match[1] ?? "p"), text };
     },
   ).filter((block): block is StoryContentBlock => Boolean(block));
+
+  if (contentBlocks.length === 0) {
+    contentBlocks = jsonLdContentBlocks(html);
+  }
 
   if (contentBlocks.length === 0) {
     throw new Error("Could not find story body text on the page.");
@@ -180,6 +184,9 @@ function extractBodyContainerHtml(html: string): string {
       html,
       /<div\b(?=[^>]*class=["'][^"']*richText[^"']*["'])[^>]*>([\s\S]*?)<\/div>/i,
     ) ??
+    htmlFromClassSlice(html, "crawler") ??
+    htmlFromItempropSlice(html, "articleBody") ??
+    firstMatch(html, /<div\b[^>]*id=["']wsj-article-wrap["'][^>]*>([\s\S]*?)<\/div>/i) ??
     firstMatch(html, /<article\b[^>]*>([\s\S]*?)<\/article>/i) ??
     html
   );
@@ -191,13 +198,29 @@ function firstMatch(value: string, pattern: RegExp): string | undefined {
 
 function htmlFromClassSlice(html: string, className: string): string | undefined {
   const classMatcher = new RegExp(`<[^>]+\\bclass=["'][^"']*${escapeRegExp(className)}[^"']*["'][^>]*>`, "i");
-  const match = classMatcher.exec(html);
+  return sliceUntilStop(html, classMatcher);
+}
+
+function htmlFromItempropSlice(html: string, itemprop: string): string | undefined {
+  const matcher = new RegExp(
+    `<(?:div|section|article)\\b[^>]*\\bitemprop=["']${escapeRegExp(itemprop)}["'][^>]*>`,
+    "i",
+  );
+  return sliceUntilStop(html, matcher);
+}
+
+function sliceUntilStop(html: string, startMatcher: RegExp): string | undefined {
+  const match = startMatcher.exec(html);
   if (!match) {
     return undefined;
   }
   const stopPatterns = [
     /<div\b[^>]*class=["'][^"']*comments[^"']*["']/i,
     /<section\b[^>]*class=["'][^"']*comments[^"']*["']/i,
+    /<div\b[^>]*aria-label=["']What to Read Next["']/i,
+    /<div\b[^>]*aria-label=["']Sponsored Offers["']/i,
+    /<div\b[^>]*aria-label=["']Utility Bar["']/i,
+    /<aside\b/i,
     /<\/article>/i,
     /<\/body>/i,
   ];
@@ -207,6 +230,64 @@ function htmlFromClassSlice(html: string, className: string): string | undefined
     .filter((index): index is number => typeof index === "number" && index > 0)
     .sort((left, right) => left - right)[0];
   return stop ? rest.slice(0, stop) : rest;
+}
+
+function jsonLdContentBlocks(html: string): StoryContentBlock[] {
+  const blocks: StoryContentBlock[] = [];
+  for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    const articleBody = jsonLdArticleBody(match[1] ?? "");
+    if (!articleBody) {
+      continue;
+    }
+    for (const paragraph of articleBody.split(/\n{2,}/)) {
+      const text = cleanText(paragraph);
+      if (!text || isBlockedText(text)) {
+        continue;
+      }
+      blocks.push({ type: "paragraph", text });
+    }
+    if (blocks.length > 0) {
+      return blocks;
+    }
+  }
+  return blocks;
+}
+
+function jsonLdArticleBody(raw: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const records = Array.isArray(parsed) ? parsed : [parsed];
+    for (const record of records) {
+      const body = newsArticleBody(record);
+      if (body) {
+        return body;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function newsArticleBody(value: unknown): string | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  if ("@graph" in value && Array.isArray(value["@graph"])) {
+    for (const node of value["@graph"]) {
+      const nested = newsArticleBody(node);
+      if (nested) {
+        return nested;
+      }
+    }
+  }
+  const typeValue = "@type" in value ? value["@type"] : undefined;
+  const types = Array.isArray(typeValue) ? typeValue : [typeValue];
+  const articleBody = "articleBody" in value ? value.articleBody : undefined;
+  if (types.includes("NewsArticle") && typeof articleBody === "string" && articleBody.trim()) {
+    return articleBody;
+  }
+  return undefined;
 }
 
 function escapeRegExp(value: string): string {

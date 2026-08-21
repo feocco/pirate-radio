@@ -12,11 +12,11 @@ pasted article URLs, and custom pasted text.
    stable Yes/No action IDs.
 4. Listen for Home Assistant `mobile_app_notification_action` events over
    WebSocket.
-5. On article approval, extract Pirate Wires through the saved Playwright
-   profile, fetch public Substack HTML directly, or retrieve an X Article's
-   structured `article` field and expanded author account through the official
-   Post lookup API. Custom text entries skip extraction and create a story
-   object directly from title/body.
+5. On article approval, extract Pirate Wires and WSJ through the saved
+   Playwright profile, fetch public Substack HTML directly, or retrieve an X
+   Article's structured `article` field and expanded author account through the
+   official Post lookup API. Custom text entries skip extraction and create a
+   story object directly from title/body.
 6. Cache article art locally when available, synthesize MP3 audio through the
    selected TTS provider, and optionally write word-timing alignment JSON.
 7. Write story JSON, text, MP3, cached image, and a library manifest.
@@ -30,8 +30,8 @@ one notification, which avoids a startup flood. Later polls only mark articles
 seen when they are queued or decided.
 
 Extraction fails closed when the persistent Playwright profile is not logged
-into Pirate Wires. The service sends a failure notification, keeps the article
-pending for retry, and avoids generating preview-length audio. When
+into Pirate Wires or WSJ. The service sends a failure notification, keeps the
+article pending for retry, and avoids generating preview-length audio. When
 `PIRATE_RADIO_REAUTH_URL` is configured, auth failures send a dedicated
 login-required notification that opens the Tailnet-only reauth browser.
 
@@ -70,13 +70,18 @@ manifest, and marks in-flight conversions from service memory. Posting to
 existing `accept` workflow in the background.
 
 The queue page also accepts pasted Pirate Wires, Hyperdimensional, and Substack
-`/p/...` article URLs plus X `/<username>/status/<id>` Article URLs.
+`/p/...` article URLs, X `/<username>/status/<id>` Article URLs, and WSJ article
+URLs (`/section/headline-id` or `/articles/headline`).
 `POST /queue/convert-url` validates known article URL patterns, records a
 minimal pending article, and starts the same background conversion workflow.
 X extraction uses `GET /2/tweets/<id>?tweet.fields=article,author_id` with an
 app-only bearer token; the expanded X account display name becomes the author,
 with the handle as a fallback. It does not depend on X page markup or a browser
 session.
+WSJ extraction reuses the Pirate Wires Playwright profile, scrolls the article
+to reveal lazy-loaded body text, and fails closed without a subscriber session
+or when only a paywall snippet is present. There is no RSS monitor and no
+unauthenticated scrape path.
 Completion/failure still comes through the normal phone notifications.
 `/backlog` routes remain compatibility aliases.
 

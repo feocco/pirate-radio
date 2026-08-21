@@ -41,6 +41,9 @@ function sourceNameFromUrl(sourceUrl: string): string | undefined {
     ) {
       return "Pirate Wires";
     }
+    if (url.hostname === "www.wsj.com" || url.hostname === "wsj.com") {
+      return "WSJ";
+    }
     if (url.hostname === "x.com" || url.hostname.endsWith(".x.com")) {
       return "X";
     }

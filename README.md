@@ -3,7 +3,8 @@
 OIDC-protected homelab reader and local CLI for collecting articles from across
 the web, queueing pasted text, generating OpenAI text-to-speech audio, and
 reading generated audio with cached article art where available. Supported
-article sources include Pirate Wires, Substack publications, and X Articles.
+article sources include Pirate Wires, Substack publications, X Articles, and
+WSJ articles.
 
 ## Setup
 
@@ -24,6 +25,11 @@ npm run cli -- login
 This opens a dedicated Playwright browser profile in `.playwright-profile/`.
 Log in to Pirate Wires with your email passcode, then press Enter in the
 terminal. The profile directory is ignored by git and reused by later commands.
+The same profile can also hold a WSJ subscriber session:
+
+```bash
+npm run cli -- login wsj
+```
 
 ## Extract Text
 
@@ -41,6 +47,9 @@ optional author, tagline, body blocks, best-effort section titles, and the
 article hero image URL.
 X Articles use the official X Post lookup API and require
 `X_API_BEARER_TOKEN`; the public X page is not scraped.
+WSJ articles reuse the Playwright profile and require a logged-in subscriber
+session; public preview pages fail closed instead of generating teaser-length
+audio.
 
 ## Generate Audio
 
@@ -102,8 +111,9 @@ the `pirate-radio-users` group for every reader route, and requires
 [HTTP contract](docs/api.md).
 
 When an article is approved, the service now fails closed if the Playwright
-profile is not logged into Pirate Wires, sends a failure notification with the
-active profile path, and leaves the article pending so it can be retried. After
+profile is not logged into Pirate Wires or WSJ (for those sources), sends a
+failure notification with the active profile path, and leaves the article
+pending so it can be retried. After
 successful audio generation, it sends a ready notification that opens the
 article page directly.
 
@@ -138,8 +148,9 @@ The reader serves:
 The queue list is RSS-window-only in v1. It compares the current configured
 feeds against the library manifest, then queues selected articles through the
 same approval, extraction, TTS, and notification workflow used by mobile
-actions. Pasted Pirate Wires, Hyperdimensional, Substack `/p/...`, and X
-`/<username>/status/<id>` Article URLs can also be queued from the queue page.
+actions. Pasted Pirate Wires, Hyperdimensional, Substack `/p/...`, X
+`/<username>/status/<id>` Article, and WSJ article URLs can also be queued from
+the queue page.
 Custom title/text entries bypass article extraction and write directly into the
 same reader library after TTS generation.
 

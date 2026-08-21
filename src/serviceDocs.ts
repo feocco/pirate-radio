@@ -432,7 +432,7 @@ const pirateRadioOpenApi = {
     "/queue/convert-url": {
       post: {
         tags: ["queue"],
-        summary: "Queue conversion for a pasted Pirate Wires, Substack, or X Article URL",
+        summary: "Queue conversion for a pasted Pirate Wires, Substack, X Article, or WSJ URL",
         requestBody: {
           required: true,
           content: {

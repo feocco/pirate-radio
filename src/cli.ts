@@ -21,14 +21,19 @@ program
 
 program
   .command("login")
-  .description("Open a browser with an isolated profile for Pirate Wires login.")
-  .action(async () => {
-    await openLoginBrowser();
+  .argument("[site]", "Site to log into: pirate-wires or wsj", "pirate-wires")
+  .description("Open a browser with an isolated profile for Pirate Wires or WSJ login.")
+  .action(async (site: string) => {
+    const normalized = site.toLowerCase();
+    if (normalized !== "pirate-wires" && normalized !== "wsj") {
+      throw new Error('Site must be "pirate-wires" or "wsj".');
+    }
+    await openLoginBrowser(normalized);
   });
 
 program
   .command("extract")
-  .argument("<url>", "Pirate Wires story URL")
+  .argument("<url>", "Supported story URL")
   .description("Extract story text, reader metadata, and write txt/json outputs.")
   .action(async (url: string) => {
     const story = await extractStoryFromUrl(url);
@@ -61,7 +66,7 @@ program
 
 program
   .command("read")
-  .argument("<url>", "Pirate Wires story URL")
+  .argument("<url>", "Supported story URL")
   .option("--provider <provider>", "TTS provider", "openai")
   .option("--allow-over-budget", "Allow audio generation over the $1 estimate", false)
   .description("Extract a story and generate audio in one command.")

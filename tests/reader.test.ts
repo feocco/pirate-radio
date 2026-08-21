@@ -228,7 +228,7 @@ describe("reader page", () => {
     expect(html).toContain("/queue/convert/");
     expect(html).toContain("/queue/convert-url");
     expect(html).toContain("/queue/convert-text");
-    expect(html).toContain("Paste an article URL (Pirate Wires, Substack, or X).");
+    expect(html).toContain("Paste an article URL (Pirate Wires, Substack, X, or WSJ).");
     expect(html).toContain("Custom text title");
     expect(html).toContain("Paste text to convert");
     expect(html).toContain("queueText");

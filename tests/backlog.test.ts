@@ -232,13 +232,24 @@ describe("backlog", () => {
       sourceType: "x",
       sourceName: "X",
     });
+    await expect(
+      validateArticleUrl(
+        "https://www.wsj.com/tech/steve-jobs-apple-next-cia-161b65f9?st=NWWds1&reflink=desktopwebshare_permalink",
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      url: "https://www.wsj.com/tech/steve-jobs-apple-next-cia-161b65f9",
+      slug: "steve-jobs-apple-next-cia-161b65f9",
+      sourceType: "wsj",
+      sourceName: "WSJ",
+    });
     await expect(validateArticleUrl("not a url")).resolves.toEqual({
       ok: false,
       error: "Enter a valid URL.",
     });
     await expect(validateArticleUrl("https://example.com/p/test-story")).resolves.toEqual({
       ok: false,
-      error: "Enter a supported article URL from Pirate Wires, Substack, or X.",
+      error: "Enter a supported article URL from Pirate Wires, Substack, X, or WSJ.",
     });
     await expect(validateArticleUrl("https://x.com/demishassabis")).resolves.toEqual({
       ok: false,
@@ -247,6 +258,10 @@ describe("backlog", () => {
     await expect(validateArticleUrl("https://www.piratewires.com/about")).resolves.toEqual({
       ok: false,
       error: "Enter an article URL with a /p/story-slug path.",
+    });
+    await expect(validateArticleUrl("https://www.wsj.com/tech")).resolves.toEqual({
+      ok: false,
+      error: "Enter a WSJ article URL such as /section/headline-id or /articles/headline.",
     });
   });
 
@@ -332,6 +347,33 @@ describe("backlog", () => {
     expect(startConversion).toHaveBeenCalledWith("2076957440109625718");
   });
 
+  test("queueing a pasted WSJ URL records WSJ source metadata", async () => {
+    const state = createInitialState();
+    const startConversion = vi.fn(async () => {});
+
+    const result = await queueBacklogUrlConversion({
+      url: "https://www.wsj.com/tech/steve-jobs-apple-next-cia-161b65f9?st=NWWds1",
+      manifest,
+      state,
+      statePath: "/tmp/state.json",
+      processingSlugs: new Set(),
+      writeState: vi.fn(async () => {}),
+      startConversion,
+    });
+
+    expect(result).toEqual({ ok: true, status: "queued", slug: "steve-jobs-apple-next-cia-161b65f9" });
+    expect(state.pending["steve-jobs-apple-next-cia-161b65f9"]).toMatchObject({
+      id: "https://www.wsj.com/tech/steve-jobs-apple-next-cia-161b65f9",
+      url: "https://www.wsj.com/tech/steve-jobs-apple-next-cia-161b65f9",
+      slug: "steve-jobs-apple-next-cia-161b65f9",
+      sourceType: "wsj",
+      sourceName: "WSJ",
+      title: "Steve Jobs Apple Next Cia",
+      description: "Queued from pasted WSJ URL.",
+    });
+    expect(startConversion).toHaveBeenCalledWith("steve-jobs-apple-next-cia-161b65f9");
+  });
+
   test("queueing an unsupported URL reports a validation error", async () => {
     const result = await queueBacklogUrlConversion({
       url: "https://example.com/p/direct-story",
@@ -346,7 +388,7 @@ describe("backlog", () => {
     expect(result).toEqual({
       ok: false,
       status: "invalid_url",
-      error: "Enter a supported article URL from Pirate Wires, Substack, or X.",
+      error: "Enter a supported article URL from Pirate Wires, Substack, X, or WSJ.",
     });
   });
 });

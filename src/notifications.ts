@@ -1,6 +1,8 @@
 import type { PirateArticle } from "./feed.js";
 import type { LibraryItem } from "./library.js";
+import { PirateWiresAuthRequiredError } from "./browser.js";
 import { slugFromUrl } from "./slug.js";
+import { WsjAuthRequiredError } from "./wsjArticle.js";
 
 export type PirateRadioDecision = "accept" | "skip";
 
@@ -75,7 +77,7 @@ export function buildArticleFailureNotification(
   if (isAuthRequiredError(error) && reauthUrl) {
     return {
       title: "Pirate Radio Login Required",
-      message: `${article.title} needs a fresh Pirate Wires login before audio can be generated.`,
+      message: `${article.title} needs a fresh ${authRequiredSourceName(error, article)} login before audio can be generated.`,
       tag: `pirate-radio-login-${slug}`,
       group: "pirate-radio",
       url: reauthUrl,
@@ -120,5 +122,15 @@ function failureMessage(error: unknown): string {
 }
 
 function isAuthRequiredError(error: unknown): boolean {
-  return error instanceof Error && error.name === "PirateWiresAuthRequiredError";
+  return error instanceof PirateWiresAuthRequiredError || error instanceof WsjAuthRequiredError;
+}
+
+function authRequiredSourceName(error: unknown, article: PirateArticle): string {
+  if (error instanceof PirateWiresAuthRequiredError) {
+    return "Pirate Wires";
+  }
+  if (error instanceof WsjAuthRequiredError) {
+    return "WSJ";
+  }
+  return article.sourceName ?? "source";
 }

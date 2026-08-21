@@ -4,6 +4,7 @@ import type { ArticleSourceType, PirateArticle } from "./feed.js";
 import type { LibraryManifest } from "./library.js";
 import type { PirateRadioState } from "./state.js";
 import { isXHostname, parseXPostUrl } from "./xArticle.js";
+import { isWsjHostname, parseWsjArticleUrl, titleFromWsjSlug, WSJ_SOURCE_NAME } from "./wsjArticle.js";
 
 export interface BacklogItem {
   slug: string;
@@ -126,7 +127,7 @@ export async function queueBacklogUrlConversion(
 
   const article: PirateArticle = {
     id: validation.url,
-    title: validation.sourceType === "x" ? "X Article" : titleFromSlug(validation.slug),
+    title: pendingTitle(validation),
     url: validation.url,
     author: "",
     publishedAt: "",
@@ -194,6 +195,23 @@ export async function validateArticleUrl(
     };
   }
 
+  if (isWsjHostname(url.hostname)) {
+    const wsjArticle = parseWsjArticleUrl(url);
+    if (!wsjArticle) {
+      return {
+        ok: false,
+        error: "Enter a WSJ article URL such as /section/headline-id or /articles/headline.",
+      };
+    }
+    return {
+      ok: true,
+      url: wsjArticle.canonicalUrl,
+      slug: wsjArticle.slug,
+      sourceType: "wsj",
+      sourceName: WSJ_SOURCE_NAME,
+    };
+  }
+
   const parts = url.pathname.split("/").filter(Boolean);
   if (parts[0] !== "p" || !parts[1]) {
     return {
@@ -207,7 +225,7 @@ export async function validateArticleUrl(
   const slug = slugFromUrl(url.toString());
   const source = sourceForUrl(url);
   if (!source) {
-    return { ok: false, error: "Enter a supported article URL from Pirate Wires, Substack, or X." };
+    return { ok: false, error: "Enter a supported article URL from Pirate Wires, Substack, X, or WSJ." };
   }
   const canonicalUrl = canonicalArticleUrl(url, source.sourceType);
   return { ok: true, url: canonicalUrl, slug, ...source };
@@ -249,6 +267,16 @@ function isConverted(article: PirateArticle, manifest: LibraryManifest): boolean
       item.sourceUrl === article.url ||
       Boolean(item.canonicalUrl && article.canonicalUrl && item.canonicalUrl === article.canonicalUrl),
   );
+}
+
+function pendingTitle(validation: Extract<ArticleUrlValidation, { ok: true }>): string {
+  if (validation.sourceType === "x") {
+    return "X Article";
+  }
+  if (validation.sourceType === "wsj") {
+    return titleFromWsjSlug(validation.slug);
+  }
+  return titleFromSlug(validation.slug);
 }
 
 function titleFromSlug(slug: string): string {

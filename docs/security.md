@@ -20,6 +20,7 @@ Cached article images and alignment JSON are generated runtime artifacts and
 belong under the ignored library/output directory, not in git.
 When `PWR_PROFILE_DIR` points into `/data`, that profile directory contains
 logged-in browser session material and must stay in the ignored runtime volume.
+That profile may also hold a WSJ subscriber session for pasted WSJ conversions.
 X Article extraction uses an app-only bearer token against `api.x.com`; it does
 not reuse a user's X account, cookies, or browser profile.
 

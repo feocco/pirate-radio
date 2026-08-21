@@ -2,8 +2,8 @@ import { cleanText } from "./extractor.js";
 import { filterVoiceExcludedArticles } from "./articleFilters.js";
 import { slugFromUrl } from "./slug.js";
 
-export type ArticleSourceType = "pirate-wires" | "substack" | "x";
-export type ArticleFeedSourceType = Exclude<ArticleSourceType, "x">;
+export type ArticleSourceType = "pirate-wires" | "substack" | "x" | "wsj";
+export type ArticleFeedSourceType = Exclude<ArticleSourceType, "x" | "wsj">;
 
 export interface ArticleFeedConfig {
   id: string;

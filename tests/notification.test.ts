@@ -5,7 +5,7 @@ import {
   buildArticleReadyNotification,
   parsePirateRadioAction,
 } from "../src/notifications.js";
-import { PirateWiresAuthRequiredError } from "../src/browser.js";
+import { PirateWiresAuthRequiredError, WsjAuthRequiredError } from "../src/browser.js";
 
 describe("Pirate Radio notifications", () => {
   const article = {
@@ -93,5 +93,22 @@ describe("Pirate Radio notifications", () => {
         uri: "http://maclabs-mac-mini.taildf3445.ts.net:5801/",
       },
     ]);
+  });
+
+  test("builds a WSJ login notification for auth failures when reauth URL is configured", () => {
+    const notification = buildArticleFailureNotification(
+      {
+        ...article,
+        title: "Steve Jobs, Apple and the CIA",
+        sourceName: "WSJ",
+      },
+      new WsjAuthRequiredError("/data/playwright-profile"),
+      "https://pirate-radio.example.test/",
+      "http://maclabs-mac-mini.taildf3445.ts.net:5801/",
+    );
+
+    expect(notification.title).toBe("Pirate Radio Login Required");
+    expect(notification.message).toContain("fresh WSJ login");
+    expect(notification.url).toBe("http://maclabs-mac-mini.taildf3445.ts.net:5801/");
   });
 });
