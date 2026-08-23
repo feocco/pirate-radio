@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateKeyPair, exportJWK, SignJWT } from "jose";
+import { buildSubjectAltName } from "../../dist/src/dev/oidcCert.js";
 
 // GUARDRAIL: this issuer auto-approves logins and mints an admin identity. It is
 // only allowed in the dev stack, never in a real deployment.
@@ -55,7 +56,7 @@ function ensureCert() {
   execFileSync("openssl", [
     "req", "-x509", "-newkey", "rsa:2048", "-nodes",
     "-keyout", keyPath, "-out", certPath, "-days", "30",
-    "-subj", `/CN=${HOST}`, "-addext", `subjectAltName=IP:${HOST},DNS:localhost`,
+    "-subj", `/CN=${HOST}`, "-addext", `subjectAltName=${buildSubjectAltName(HOST)}`,
   ], { stdio: "ignore" });
 }
 
