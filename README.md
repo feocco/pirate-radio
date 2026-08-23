@@ -144,9 +144,9 @@ Custom title/text entries bypass article extraction and write directly into the
 same reader library after TTS generation.
 
 Set `PIRATE_RADIO_ENABLE_ALIGNMENT=true` to prototype word-level highlighting.
-When enabled, the service runs a post-TTS `whisper-1` transcription with word
-timestamps and writes alignment JSON. This is disabled by default because it adds
-cost, latency, and approximate source-text matching.
+When enabled, synthesis requests xAI TTS with `with_timestamps` and writes that
+timing JSON. If timestamps are missing, it falls back to xAI speech-to-text.
+Alignment stays off by default because it adds cost and latency.
 
 For manual backfills after relogin, refresh and regenerate an existing library
 item with:

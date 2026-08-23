@@ -5,11 +5,6 @@ export function estimateTtsCost(characterCount: number): number {
   return (characterCount / 1_000_000) * TTS_USD_PER_MILLION_CHARS;
 }
 
-/** @deprecated Use estimateTtsCost */
-export function estimateOpenAiTtsCost(characterCount: number): number {
-  return estimateTtsCost(characterCount);
-}
-
 export function assertWithinBudget(
   characterCount: number,
   allowOverBudget: boolean,
