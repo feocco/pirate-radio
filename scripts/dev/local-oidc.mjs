@@ -52,10 +52,14 @@ const certPath = join(devDir, "oidc-cert.pem");
 function ensureCert() {
   if (existsSync(keyPath) && existsSync(certPath)) return;
   mkdirSync(devDir, { recursive: true });
+  // openssl rejects `IP:` entries that are not IP literals, so a DNS host such
+  // as the default `localhost` has to be declared as `DNS:`.
+  const isIpLiteral = /^[0-9.]+$/.test(HOST) || HOST.includes(":");
+  const names = new Set([isIpLiteral ? `IP:${HOST}` : `DNS:${HOST}`, "DNS:localhost", "IP:127.0.0.1"]);
   execFileSync("openssl", [
     "req", "-x509", "-newkey", "rsa:2048", "-nodes",
     "-keyout", keyPath, "-out", certPath, "-days", "30",
-    "-subj", `/CN=${HOST}`, "-addext", `subjectAltName=IP:${HOST},DNS:localhost`,
+    "-subj", `/CN=${HOST}`, "-addext", `subjectAltName=${[...names].join(",")}`,
   ], { stdio: "ignore" });
 }
 
