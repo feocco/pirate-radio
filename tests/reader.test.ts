@@ -10,6 +10,7 @@ import {
   renderMediaPlayerClient,
   serializeMediaPlayerTrackForScript,
 } from "../src/mediaPlayer.js";
+import { ACCENT } from "../src/theme.js";
 import type { LibraryItem } from "../src/library.js";
 import type { Story } from "../src/types.js";
 import { adminUser, memberUser } from "./support/fakes.js";
@@ -59,7 +60,8 @@ describe("reader page", () => {
     expect(html).toContain('/vendor/shikwasa/shikwasa.iife.js');
     expect(html).toContain("mountMediaPlayer");
     expect(html).toContain('fixed: { type: "static" }');
-    expect(html).toContain('themeColor: "#58ad5c"');
+    expect(html).toContain(`themeColor: "${ACCENT}"`);
+    expect(html).toContain("--color-primary: var(--accent) !important;");
     expect(html).toContain("escapePlayerText(track.title)");
     expect(html).toContain("escapePlayerText(track.sourceName)");
     expect(html).toContain('url.startsWith("/images/")');
@@ -240,7 +242,7 @@ describe("reader page", () => {
     expect(html).toContain("Convert");
     expect(html).toContain("pageSize = 10");
     expect(html).not.toContain('placeholder.textContent = "PW"');
-    expect(html).toContain('<a class="navlink active" href="/queue">Queue</a>');
+    expect(html).toContain('<a class="navlink active" href="/queue" aria-current="page">Queue</a>');
     expect(html).toContain('<a class="brandlink" href="/" aria-label="Pirate Radio home">');
   });
 
@@ -290,7 +292,7 @@ describe("reader page", () => {
     expect(html).toContain("/health");
     expect(html).toContain("/library.json");
     expect(html).toContain("/queue.json");
-    expect(html).toContain('<a class="navlink active" href="/admin">Admin</a>');
+    expect(html).toContain('<a class="navlink active" href="/admin" aria-current="page">Admin</a>');
     expect(html).not.toContain("Culture");
   });
 
