@@ -3,12 +3,14 @@ export interface TtsRequest {
   text: string;
   outputPath: string;
   allowOverBudget: boolean;
+  includeTimestamps?: boolean;
 }
 
 export interface TtsResult {
   provider: string;
   outputPath: string;
   estimatedCostUsd: number;
+  words?: { word: string; start: number; end: number }[];
 }
 
 export interface TtsProvider {

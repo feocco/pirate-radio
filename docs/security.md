@@ -4,7 +4,7 @@
 
 Do not commit real values for:
 
-- `OPENAI_API_KEY`
+- `XAI_API_KEY`
 - `HA_URL`
 - `HA_LONG_LIVED_TOKEN`
 - `HOMELAB_FUNCTIONS_TOKEN`

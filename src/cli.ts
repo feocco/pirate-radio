@@ -40,7 +40,7 @@ program
 program
   .command("speak")
   .argument("<json-or-url>", "Story JSON file or supported article URL")
-  .option("--provider <provider>", "TTS provider", "openai")
+  .option("--provider <provider>", "TTS provider", "xai")
   .option("--allow-over-budget", "Allow audio generation over the $1 estimate", false)
   .description("Generate audio from extracted story JSON or from a story URL.")
   .action(async (input: string, options: { provider: string; allowOverBudget: boolean }) => {
@@ -62,7 +62,7 @@ program
 program
   .command("read")
   .argument("<url>", "Pirate Wires story URL")
-  .option("--provider <provider>", "TTS provider", "openai")
+  .option("--provider <provider>", "TTS provider", "xai")
   .option("--allow-over-budget", "Allow audio generation over the $1 estimate", false)
   .description("Extract a story and generate audio in one command.")
   .action(async (url: string, options: { provider: string; allowOverBudget: boolean }) => {

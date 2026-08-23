@@ -1,7 +1,7 @@
 # Pirate Radio
 
 OIDC-protected homelab reader and local CLI for collecting articles from across
-the web, queueing pasted text, generating OpenAI text-to-speech audio, and
+the web, queueing pasted text, generating xAI text-to-speech audio, and
 reading generated audio with cached article art where available. Supported
 article sources include Pirate Wires, Substack publications, and X Articles.
 
@@ -12,7 +12,7 @@ npm install
 npx playwright install chromium
 ```
 
-The OpenAI audio command uses `OPENAI_API_KEY` from the environment. The CLI
+The xAI audio command uses `XAI_API_KEY` from the environment. The CLI
 does not print or store the key.
 
 ## Login
@@ -47,32 +47,32 @@ X Articles use the official X Post lookup API and require
 From an existing JSON file:
 
 ```bash
-npm run cli -- speak output/json/story-slug.json --provider openai
+npm run cli -- speak output/json/story-slug.json --provider xai
 ```
 
 Extract and generate audio in one command:
 
 ```bash
-npm run cli -- read "https://www.piratewires.com/p/story-slug" --provider openai
+npm run cli -- read "https://www.piratewires.com/p/story-slug" --provider xai
 ```
 
 Outputs:
 
 - `output/audio/<slug>.mp3`
 
-OpenAI defaults:
+xAI defaults:
 
-- Model: `gpt-4o-mini-tts`
-- Voice: `alloy`
+- Voice: `eve`
+- Language: `en`
 - Format: `mp3`
 
-The CLI estimates OpenAI TTS cost at `$15 / 1M characters` and refuses to
+The CLI estimates xAI TTS cost at `$15 / 1M characters` and refuses to
 generate audio above `$1` unless `--allow-over-budget` is passed.
 
 ## Providers
 
 TTS providers implement `TtsProvider.synthesize({ title, text, outputPath })`.
-Only `openai` is implemented now; the provider boundary is in place so
+Only `xai` is implemented now; the provider boundary is in place so
 ElevenLabs can be added later without changing the extraction commands.
 
 ## Checks

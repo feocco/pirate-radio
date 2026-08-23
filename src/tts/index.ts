@@ -1,12 +1,12 @@
-import { OpenAiTtsProvider } from "./openai.js";
+import { XaiTtsProvider } from "./xai.js";
 import type { TtsProvider } from "./types.js";
 
 export function createTtsProvider(providerName: string): TtsProvider {
-  if (providerName === "openai") {
-    return new OpenAiTtsProvider();
+  if (providerName === "xai") {
+    return new XaiTtsProvider();
   }
 
-  throw new Error(`Unsupported TTS provider "${providerName}". Available providers: openai.`);
+  throw new Error(`Unsupported TTS provider "${providerName}". Available providers: xai.`);
 }
 
 export type { TtsProvider, TtsRequest, TtsResult } from "./types.js";

@@ -3,12 +3,12 @@
 // Default mode is "fixtures": it copies the pre-generated MP3s and hero images
 // under scripts/dev/seed-assets/ into the reader library and records matching
 // Postgres rows (member/admin user, submission history, playback progress).
-// This means NO OpenAI TTS runs at agent runtime — audio is baked into the repo
+// This means NO xAI TTS runs at agent runtime — audio is baked into the repo
 // and reused, so there is no per-run TTS cost and no team secret is required.
 //
 // Optional dynamic mode (PIRATE_RADIO_SEED_DYNAMIC=1) pulls recent public
-// Substack-type articles via real extraction + OpenAI TTS. It incurs cost and
-// needs OPENAI_API_KEY plus feed egress, so it is off by default.
+// Substack-type articles via real extraction + xAI TTS. It incurs cost and
+// needs XAI_API_KEY plus feed egress, so it is off by default.
 //
 // GUARDRAIL: refuses to run unless PIRATE_RADIO_DEV_STACK=1 and NODE_ENV is not
 // "production", so it can never seed a real deployment.
@@ -142,9 +142,9 @@ async function seedFromFixtures(database, user) {
 }
 
 async function seedDynamic(database, user) {
-  // Opt-in: pull recent live articles and synthesize with OpenAI TTS (costs money).
-  if (!process.env.OPENAI_API_KEY) {
-    console.warn("[seed] dynamic mode needs OPENAI_API_KEY; falling back to fixtures.");
+  // Opt-in: pull recent live articles and synthesize with xAI TTS (costs money).
+  if (!process.env.XAI_API_KEY) {
+    console.warn("[seed] dynamic mode needs XAI_API_KEY; falling back to fixtures.");
     return seedFromFixtures(database, user);
   }
   const { createTtsProvider } = await import(dist("tts/index.js"));
@@ -157,7 +157,7 @@ async function seedDynamic(database, user) {
   const count = Number(process.env.PIRATE_RADIO_SEED_COUNT ?? 3);
   const manifest = await readLibraryManifest(config.libraryDir);
   const existing = new Set(manifest.items.map((i) => i.slug));
-  const synthesize = providerSynthesizer(createTtsProvider("openai"));
+  const synthesize = providerSynthesizer(createTtsProvider("xai"));
   const substackFeeds = config.feeds.filter((f) => f.type === "substack");
   const articles = await fetchArticleFeeds(substackFeeds);
   let created = 0;
