@@ -6,6 +6,7 @@ import { wordsFromGraphTimestamps } from "./timestamps.js";
 import type { TtsProvider, TtsRequest, TtsResult } from "./types.js";
 
 const XAI_TTS_URL = "https://api.x.ai/v1/tts";
+const TTS_TIMEOUT_MS = 60_000;
 
 interface XaiTimestampResponse {
   audio: string;
@@ -66,30 +67,20 @@ export class XaiTtsProvider implements TtsProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
       });
 
       if (!response.ok) {
         throw new Error(`xAI TTS request failed: ${response.status} ${await response.text()}`);
       }
 
-      if (request.includeTimestamps) {
-        const payload = (await response.json()) as XaiTimestampResponse;
-        buffers.push(Buffer.from(payload.audio, "base64"));
-
-        const chunkWords = wordsFromGraphTimestamps(
-          payload.audio_timestamps.graph_chars,
-          payload.audio_timestamps.graph_times,
-          timeOffset,
-        );
-        allWords.push(...chunkWords);
-
-        if (payload.duration != null) {
-          timeOffset += payload.duration;
-        } else if (chunkWords.length > 0) {
-          timeOffset = chunkWords[chunkWords.length - 1]!.end;
-        }
-      } else {
-        buffers.push(Buffer.from(await response.arrayBuffer()));
+      const parsed = await parseTtsResponse(response, Boolean(request.includeTimestamps), timeOffset);
+      buffers.push(parsed.audio);
+      allWords.push(...parsed.words);
+      if (parsed.duration != null) {
+        timeOffset += parsed.duration;
+      } else if (parsed.words.length > 0) {
+        timeOffset = parsed.words[parsed.words.length - 1]!.end;
       }
     }
 
@@ -102,4 +93,32 @@ export class XaiTtsProvider implements TtsProvider {
       ...(request.includeTimestamps && allWords.length > 0 ? { words: allWords } : {}),
     };
   }
+}
+
+async function parseTtsResponse(
+  response: Response,
+  wantTimestamps: boolean,
+  timeOffset: number,
+): Promise<{ audio: Buffer; words: NonNullable<TtsResult["words"]>; duration?: number }> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!wantTimestamps || !contentType.includes("json")) {
+    return { audio: Buffer.from(await response.arrayBuffer()), words: [] };
+  }
+
+  const payload = (await response.json()) as Partial<XaiTimestampResponse>;
+  if (typeof payload.audio !== "string") {
+    throw new Error("xAI TTS timestamp response did not include audio.");
+  }
+
+  const stamps = payload.audio_timestamps;
+  const words =
+    stamps?.graph_chars && stamps.graph_times
+      ? wordsFromGraphTimestamps(stamps.graph_chars, stamps.graph_times, timeOffset)
+      : [];
+
+  return {
+    audio: Buffer.from(payload.audio, "base64"),
+    words,
+    duration: payload.duration,
+  };
 }

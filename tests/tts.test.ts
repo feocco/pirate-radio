@@ -125,11 +125,13 @@ describe("XaiTtsProvider", () => {
 
     const provider = new XaiTtsProvider({
       apiKey: "test-key",
-      fetchImpl: async () =>
-        new Response(mp3, {
+      fetchImpl: async (url) => {
+        expect(url).toBe("https://api.x.ai/v1/tts");
+        return new Response(mp3, {
           status: 200,
           headers: { "Content-Type": "audio/mpeg" },
-        }),
+        });
+      },
     });
 
     const result = await provider.synthesize({
@@ -196,6 +198,29 @@ describe("XaiTtsProvider", () => {
       { word: "Bye", start: 0.4, end: 0.7 },
     ]);
     expect(await readFile(outputPath)).toEqual(Buffer.concat([Buffer.from("chunk-one"), Buffer.from("chunk-two")]));
+  });
+
+  test("keeps audio when timestamp metadata is missing", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-xai-tts-"));
+    const outputPath = join(tempDir, "audio", "no-stamps.mp3");
+    const provider = new XaiTtsProvider({
+      apiKey: "test-key",
+      fetchImpl: async () =>
+        Response.json({
+          audio: Buffer.from("still-audio").toString("base64"),
+        }),
+    });
+
+    const result = await provider.synthesize({
+      title: "Story",
+      text: "Body",
+      outputPath,
+      allowOverBudget: false,
+      includeTimestamps: true,
+    });
+
+    expect(result.words).toBeUndefined();
+    expect(await readFile(outputPath)).toEqual(Buffer.from("still-audio"));
   });
 
   test("throws when XAI_API_KEY is missing", async () => {
