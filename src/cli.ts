@@ -9,7 +9,7 @@ import { PirateRadioDatabase } from "./database.js";
 import { writeStoryOutputs } from "./output.js";
 import { PirateRadioService } from "./server.js";
 import { looksLikeUrl, readStoryJson } from "./storyFile.js";
-import { createTtsProvider } from "./tts/index.js";
+import { createTtsProvider, DEFAULT_TTS_PROVIDER } from "./tts/index.js";
 import type { Story } from "./types.js";
 
 const program = new Command();
@@ -40,7 +40,7 @@ program
 program
   .command("speak")
   .argument("<json-or-url>", "Story JSON file or supported article URL")
-  .option("--provider <provider>", "TTS provider", "xai")
+  .option("--provider <provider>", "TTS provider", DEFAULT_TTS_PROVIDER)
   .option("--allow-over-budget", "Allow audio generation over the $1 estimate", false)
   .description("Generate audio from extracted story JSON or from a story URL.")
   .action(async (input: string, options: { provider: string; allowOverBudget: boolean }) => {
@@ -62,7 +62,7 @@ program
 program
   .command("read")
   .argument("<url>", "Pirate Wires story URL")
-  .option("--provider <provider>", "TTS provider", "xai")
+  .option("--provider <provider>", "TTS provider", DEFAULT_TTS_PROVIDER)
   .option("--allow-over-budget", "Allow audio generation over the $1 estimate", false)
   .description("Extract a story and generate audio in one command.")
   .action(async (url: string, options: { provider: string; allowOverBudget: boolean }) => {

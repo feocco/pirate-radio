@@ -1,14 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-
-export interface AlignmentWord {
-  word: string;
-  start: number;
-  end: number;
-}
+import type { TimedWord } from "./tts/types.js";
 
 export interface AlignmentResult {
-  words: AlignmentWord[];
+  words: TimedWord[];
 }
 
 export interface AlignmentArtifact {
@@ -20,7 +15,7 @@ export interface WriteAlignmentInput {
   libraryDir: string;
   slug: string;
   audioPath: string;
-  words?: AlignmentWord[];
+  words?: TimedWord[];
   transcribe?: (audioPath: string) => Promise<AlignmentResult>;
 }
 

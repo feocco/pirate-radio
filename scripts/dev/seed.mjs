@@ -157,7 +157,7 @@ async function seedDynamic(database, user) {
   const count = Number(process.env.PIRATE_RADIO_SEED_COUNT ?? 3);
   const manifest = await readLibraryManifest(config.libraryDir);
   const existing = new Set(manifest.items.map((i) => i.slug));
-  const synthesize = providerSynthesizer(createTtsProvider("xai"));
+  const synthesize = providerSynthesizer(createTtsProvider());
   const substackFeeds = config.feeds.filter((f) => f.type === "substack");
   const articles = await fetchArticleFeeds(substackFeeds);
   let created = 0;

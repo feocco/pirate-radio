@@ -1,15 +1,11 @@
-export interface TimestampWord {
-  word: string;
-  start: number;
-  end: number;
-}
+import type { TimedWord } from "./types.js";
 
 export function wordsFromGraphTimestamps(
   graph_chars: string[],
   graph_times: [number, number][],
   offsetSeconds = 0,
-): TimestampWord[] {
-  const words: TimestampWord[] = [];
+): TimedWord[] {
+  const words: TimedWord[] = [];
   let currentWord = "";
   let wordStart: number | undefined;
   let wordEnd: number | undefined;

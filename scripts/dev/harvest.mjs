@@ -39,7 +39,7 @@ if (!process.env.XAI_API_KEY) {
   console.error("[harvest] XAI_API_KEY is required to synthesize audio.");
   process.exit(1);
 }
-const provider = createTtsProvider("xai");
+const provider = createTtsProvider();
 
 function truncate(text) {
   if (text.length <= MAX_CHARS) return text;

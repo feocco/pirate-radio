@@ -1,14 +1,18 @@
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import packageJson from "../package.json" with { type: "json" };
-import { createTtsProvider } from "../src/tts/index.js";
 import { assertWithinBudget, estimateTtsCost } from "../src/tts/cost.js";
-import { splitSpeechInput } from "../src/tts/chunk.js";
-import { wordsFromGraphTimestamps } from "../src/tts/timestamps.js";
-import { XaiTtsProvider } from "../src/tts/xai.js";
-import type { TtsProvider } from "../src/tts/types.js";
+import {
+  createTtsProvider,
+  DEFAULT_TTS_PROVIDER,
+  splitSpeechInput,
+  wordsFromGraphTimestamps,
+  XaiTtsProvider,
+  type TimedWord,
+  type TtsProvider,
+} from "../src/tts/index.js";
 
 let tempDir: string | undefined;
 
@@ -55,6 +59,12 @@ describe("TtsProvider contract", () => {
 });
 
 describe("createTtsProvider", () => {
+  test("returns an xAI provider by default", () => {
+    const provider = createTtsProvider();
+    expect(provider).toBeInstanceOf(XaiTtsProvider);
+    expect(provider.name).toBe(DEFAULT_TTS_PROVIDER);
+  });
+
   test("rejects removed providers", () => {
     expect(() => createTtsProvider("openai")).toThrow(
       'Unsupported TTS provider "openai". Available providers: xai.',
@@ -110,10 +120,11 @@ describe("wordsFromGraphTimestamps", () => {
       2,
     );
 
-    expect(words).toEqual([
+    const expected: TimedWord[] = [
       { word: "Hi", start: 2, end: 2.2 },
       { word: "there.", start: 2.25, end: 2.6 },
-    ]);
+    ];
+    expect(words).toEqual(expected);
   });
 });
 
@@ -125,8 +136,18 @@ describe("XaiTtsProvider", () => {
 
     const provider = new XaiTtsProvider({
       apiKey: "test-key",
-      fetchImpl: async (url) => {
+      fetchImpl: async (url, init) => {
         expect(url).toBe("https://api.x.ai/v1/tts");
+        expect(init?.headers).toMatchObject({
+          Authorization: "Bearer test-key",
+          "Content-Type": "application/json",
+        });
+        expect(JSON.parse(String(init?.body))).toEqual({
+          text: "Story\n\nShort body.",
+          voice_id: "eve",
+          language: "en",
+        });
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
         return new Response(mp3, {
           status: 200,
           headers: { "Content-Type": "audio/mpeg" },
@@ -221,6 +242,43 @@ describe("XaiTtsProvider", () => {
 
     expect(result.words).toBeUndefined();
     expect(await readFile(outputPath)).toEqual(Buffer.from("still-audio"));
+  });
+
+  test("forwards custom endpoint, language, and timeout to fetch", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-xai-tts-"));
+    const outputPath = join(tempDir, "audio", "custom.mp3");
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+
+    try {
+      const provider = new XaiTtsProvider({
+        apiKey: "test-key",
+        endpoint: "https://tts.example.test/v1/speak",
+        language: "es",
+        timeoutMs: 12_000,
+        fetchImpl: async (url, init) => {
+          expect(url).toBe("https://tts.example.test/v1/speak");
+          expect(JSON.parse(String(init?.body))).toMatchObject({
+            language: "es",
+          });
+          expect(init?.signal).toBeInstanceOf(AbortSignal);
+          return new Response(Buffer.from("custom-mp3"), {
+            status: 200,
+            headers: { "Content-Type": "audio/mpeg" },
+          });
+        },
+      });
+
+      await provider.synthesize({
+        title: "Story",
+        text: "Body",
+        outputPath,
+        allowOverBudget: false,
+      });
+
+      expect(timeout).toHaveBeenCalledWith(12_000);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 
   test("throws when XAI_API_KEY is missing", async () => {

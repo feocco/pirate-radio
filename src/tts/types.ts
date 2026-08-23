@@ -1,3 +1,9 @@
+export interface TimedWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
 export interface TtsRequest {
   title: string;
   text: string;
@@ -10,7 +16,7 @@ export interface TtsResult {
   provider: string;
   outputPath: string;
   estimatedCostUsd: number;
-  words?: { word: string; start: number; end: number }[];
+  words?: TimedWord[];
 }
 
 export interface TtsProvider {

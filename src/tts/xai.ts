@@ -3,9 +3,10 @@ import { dirname } from "node:path";
 import { splitSpeechInput } from "./chunk.js";
 import { assertWithinBudget } from "./cost.js";
 import { wordsFromGraphTimestamps } from "./timestamps.js";
-import type { TtsProvider, TtsRequest, TtsResult } from "./types.js";
+import type { TimedWord, TtsProvider, TtsRequest, TtsResult } from "./types.js";
 
 const XAI_TTS_URL = "https://api.x.ai/v1/tts";
+const TTS_LANGUAGE = "en";
 const TTS_TIMEOUT_MS = 60_000;
 
 interface XaiTimestampResponse {
@@ -21,6 +22,9 @@ export interface XaiTtsProviderOptions {
   apiKey?: string;
   voiceId?: string;
   fetchImpl?: typeof fetch;
+  endpoint?: string;
+  language?: string;
+  timeoutMs?: number;
 }
 
 export class XaiTtsProvider implements TtsProvider {
@@ -29,11 +33,17 @@ export class XaiTtsProvider implements TtsProvider {
   private readonly apiKey: string | undefined;
   private readonly voiceId: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly endpoint: string;
+  private readonly language: string;
+  private readonly timeoutMs: number;
 
   constructor(options: XaiTtsProviderOptions = {}) {
     this.apiKey = options.apiKey ?? process.env.XAI_API_KEY;
     this.voiceId = options.voiceId ?? "eve";
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.endpoint = options.endpoint ?? XAI_TTS_URL;
+    this.language = options.language ?? TTS_LANGUAGE;
+    this.timeoutMs = options.timeoutMs ?? TTS_TIMEOUT_MS;
   }
 
   async synthesize(request: TtsRequest): Promise<TtsResult> {
@@ -47,27 +57,27 @@ export class XaiTtsProvider implements TtsProvider {
 
     await mkdir(dirname(request.outputPath), { recursive: true });
     const buffers: Buffer[] = [];
-    const allWords: NonNullable<TtsResult["words"]> = [];
+    const allWords: TimedWord[] = [];
     let timeOffset = 0;
 
     for (const chunk of chunks) {
       const body: Record<string, unknown> = {
         text: chunk,
         voice_id: this.voiceId,
-        language: "en",
+        language: this.language,
       };
       if (request.includeTimestamps) {
         body.with_timestamps = true;
       }
 
-      const response = await this.fetchImpl(XAI_TTS_URL, {
+      const response = await this.fetchImpl(this.endpoint, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
+        signal: AbortSignal.timeout(this.timeoutMs),
       });
 
       if (!response.ok) {
@@ -99,7 +109,7 @@ async function parseTtsResponse(
   response: Response,
   wantTimestamps: boolean,
   timeOffset: number,
-): Promise<{ audio: Buffer; words: NonNullable<TtsResult["words"]>; duration?: number }> {
+): Promise<{ audio: Buffer; words: TimedWord[]; duration?: number }> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!wantTimestamps || !contentType.includes("json")) {
     return { audio: Buffer.from(await response.arrayBuffer()), words: [] };
