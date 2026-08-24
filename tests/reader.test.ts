@@ -105,6 +105,9 @@ describe("reader page", () => {
     expect(html).toContain("Article date");
     expect(html).toContain("item.imageUrl");
     expect(html).toContain("mountMediaPlayer(playerHost, mediaPlayerTrack(item))");
+    expect(html).toContain('playerHost.className = "media-player compact"');
+    expect(html).toContain("controls.append(actions, playerHost)");
+    expect(html).toContain(".media-player.compact .shk-controls { margin: 0; width: auto; }");
     expect(html).toContain("libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item)))");
     expect(html).toContain("destroyLibraryPlayers()");
     expect(html).toContain("mounted.destroy()");

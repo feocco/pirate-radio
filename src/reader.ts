@@ -116,6 +116,21 @@ const sharedCss = `
   .media-player .shk-text { min-width: 0; }
   .media-player .shk-controls { max-width: 100%; }
   .item, .item > *, .player-panel { min-width: 0; max-width: 100%; }
+  /* A library row already carries the cover, source and title, so the compact
+     variant drops the player's copies of them and keeps only the transport.
+     Shikwasa fixes .shk-player's height and centres .shk-controls with an auto
+     margin, both of which have to be released for the strip to collapse. */
+  .media-player.compact .shk-cover,
+  .media-player.compact .shk-text { display: none; }
+  .media-player.compact .shk { border: 0; background: transparent; }
+  .media-player.compact .shk-player { height: auto; padding: 12px 0 0; background: transparent; box-shadow: none; }
+  .media-player.compact .shk-body { height: auto; }
+  .media-player.compact .shk-main { max-width: none; padding: 0; align-items: center; }
+  .media-player.compact .shk-controls { margin: 0; width: auto; }
+  .media-player.compact .shk-display { right: 0; }
+  .item-controls { display: flex; align-items: center; gap: var(--space-4); min-width: 0; margin-top: var(--space-3); }
+  .item-controls .actions { flex: 0 0 auto; margin-top: 0; }
+  .item-controls .media-player { flex: 1 1 auto; min-width: 0; margin-top: 0; }
   /* Shikwasa writes the accent to an inline --color-primary, so the override
      has to win on specificity for the dark-scheme accent to apply. */
   .media-player .shk {
@@ -192,6 +207,8 @@ const sharedCss = `
   @media (max-width: 760px) {
     .topbar-inner { gap: var(--space-3); }
     .item { grid-template-columns: 1fr; }
+    .item-controls { display: block; }
+    .item-controls .media-player { margin-top: var(--space-2); }
     .toolbar { align-items: stretch; }
     .select, .search { width: 100%; }
     .url-queue, .text-queue { grid-template-columns: 1fr; }
@@ -354,12 +371,15 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
       downloadLink.download = item.slug + ".mp3";
       downloadLink.textContent = "Download MP3";
       const playerHost = document.createElement("div");
-      playerHost.className = "media-player";
+      playerHost.className = "media-player compact";
       libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item)));
+      const controls = document.createElement("div");
+      controls.className = "item-controls";
       actions.append(readLink, downloadLink);
+      controls.append(actions, playerHost);
       content.append(heading, meta);
       if (item.tagline) content.append(tagline);
-      content.append(actions, playerHost);
+      content.append(controls);
       section.append(image, content);
       root.append(section);
     }
