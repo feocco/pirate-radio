@@ -1,13 +1,13 @@
 // Harvest REAL articles from the configured RSS feeds into committed seed
 // fixtures (DEV/CLOUD ONLY). Run this once in an environment that can reach the
-// feeds; it downloads real hero images and generates real OpenAI TTS, then
+// feeds; it downloads real hero images and generates real xAI TTS, then
 // writes scripts/dev/seed-assets/ so the runtime seed stays cost-free.
 //
 // It reuses the app's own extractor/TTS/image code. Full body text is captured
 // for public sources (e.g. Hyperdimensional). Paywalled sources (Pirate Wires)
 // fall back to the RSS summary unless a logged-in Playwright profile is wired.
 //
-// Requires: OPENAI_API_KEY, feed egress, and PIRATE_RADIO_DEV_STACK=1.
+// Requires: XAI_API_KEY, feed egress, and PIRATE_RADIO_DEV_STACK=1.
 // Config: PIRATE_RADIO_FEEDS (or defaults), HARVEST_PER_FEED (default 1),
 //         HARVEST_MAX_CHARS (default 2600), HARVEST_ASSETS_DIR (default
 //         scripts/dev/seed-assets), HARVEST_KEEP_CUSTOM_TEXT (default 1).
@@ -35,11 +35,11 @@ const { createTtsProvider } = await import(dist("tts/index.js"));
 const { storySlug } = await import(dist("output.js"));
 
 const config = configFromEnv();
-if (!process.env.OPENAI_API_KEY) {
-  console.error("[harvest] OPENAI_API_KEY is required to synthesize audio.");
+if (!process.env.XAI_API_KEY) {
+  console.error("[harvest] XAI_API_KEY is required to synthesize audio.");
   process.exit(1);
 }
-const provider = createTtsProvider("openai");
+const provider = createTtsProvider();
 
 function truncate(text) {
   if (text.length <= MAX_CHARS) return text;

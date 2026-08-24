@@ -29,7 +29,7 @@ sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='pirate_radio'" 
 sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='pirate_radio'" | grep -q 1 \
   || sudo -u postgres createdb -O pirate_radio pirate_radio
 
-# Seed realistic data. Best-effort: needs OPENAI_API_KEY (a run-time secret) for
+# Seed realistic data. Best-effort: needs XAI_API_KEY (a run-time secret) for
 # audio, and reaches public feeds only when they are on the egress allowlist.
 if [ -f dist/src/cli.js ]; then
   node scripts/dev/seed.mjs || echo "[start] seed skipped"

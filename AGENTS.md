@@ -9,7 +9,7 @@ runtime configuration in `homelab-config`.
 - Do not commit `.env`, `.playwright-profile/`, `output/`, `dist/`, or
   `node_modules/`.
 - Do not put homelab runtime Compose files, real Home Assistant URLs/tokens,
-  OpenAI keys, or notification tokens in this public repo.
+  xAI keys, or notification tokens in this public repo.
 - Preserve the existing CLI commands: `login`, `extract`, `speak`, `read`,
   `poll`, `serve`, and `simulate`. The additive `migrate-progress` and
   `export-progress` commands own the legacy progress cutover and rollback.
@@ -96,26 +96,26 @@ Durable gotchas and clarifications:
   unreachable feed rejects `serve` startup after the listener bound.
   `scripts/dev/serve.sh` builds `PIRATE_RADIO_FEEDS` from only the reachable
   feeds and falls back to the local issuer's `/feed.xml` when all are blocked.
-- Egress is an allowlist, not a full block: `api.openai.com` is reachable, so
-  OpenAI TTS only needs the `OPENAI_API_KEY` secret. The public RSS feeds
+- Egress is an allowlist, not a full block: `api.x.ai` is reachable, so
+  xAI TTS only needs the `XAI_API_KEY` secret. The public RSS feeds
   (`piratewires.substack.com`, `www.hyperdimensional.co`) must be added to the
   Network Access allowlist, and that change only applies to a freshly booted
   agent VM (not the current session).
 - Seeding is fixtures-first and costs nothing at runtime: `scripts/dev/seed.mjs`
   copies pre-generated MP3s and hero images from `scripts/dev/seed-assets/`
   (committed to the repo) into the library and records matching Postgres rows.
-  No OpenAI key is needed at agent start, so `OPENAI_API_KEY` stays a personal
+  No xAI key is needed at agent start, so `XAI_API_KEY` stays a personal
   (user) secret and no per-run TTS cost is incurred. Feed-sourced samples carry
   hero images; Custom Text intentionally has none. It is idempotent (skips slugs
   already in the manifest). To refresh the committed assets, regenerate the MP3s
   with a key and re-commit them under `seed-assets/audio/` (and images under
   `seed-assets/images/`).
 - Opt-in `PIRATE_RADIO_SEED_DYNAMIC=1` pulls recent live Substack-type articles
-  via real extraction + OpenAI TTS (needs a key and feed egress; incurs cost and
+  via real extraction + xAI TTS (needs a key and feed egress; incurs cost and
   regenerates per run). Off by default.
 - Real-data fixtures: `scripts/dev/harvest.mjs` pulls the latest real articles
   from the configured RSS feeds, downloads their real hero images, runs real
-  OpenAI TTS once, and writes `scripts/dev/seed-assets/` (audio + images +
+  xAI TTS once, and writes `scripts/dev/seed-assets/` (audio + images +
   `articles.json`). Run it once in an egress-enabled environment, then commit
   the refreshed fixtures; runtime seeding stays cost-free. It reuses the app's
   extractor, so public sources (e.g. Hyperdimensional) get full body text while
