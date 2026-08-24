@@ -72,6 +72,8 @@ describe("reader page", () => {
     expect(html).toContain("player.initMediaSession()");
     expect(html).toContain("audio.disableRemotePlayback = false");
     expect(html).toContain("function attachCastControl");
+    expect(html).toContain("suppressProgressSaves");
+    expect(html).toContain("restorePlayback(snapshot)");
     expect(html).toContain("window.dispatchEvent(new Event(\"resize\"))");
     expect(html).toContain(".media-player { margin-top: 14px; width: 100%; max-width: 100%; min-width: 0; }");
     expect(html).toContain(".media-player .shk { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }");

@@ -88,7 +88,10 @@ export function renderMediaPlayerClient(userId?: string): string {
       applySavedProgress(audio, localStorage.getItem(keyFor(slug)));
     }
 
+    let suppressProgressSaves = false;
+
     function saveProgress(slug, audio, immediate = false, ended = false) {
+      if (suppressProgressSaves) return;
       if (!audio || !Number.isFinite(audio.currentTime)) return;
       localStorage.setItem(keyFor(slug), String(audio.currentTime));
       clearTimeout(progressTimers.get(slug));
@@ -133,7 +136,10 @@ export function renderMediaPlayerClient(userId?: string): string {
       const audio = player.audio;
       audio.disableRemotePlayback = false;
       ${attachCastControl.toString()}
-      const detachCast = attachCastControl(player);
+      const detachCast = attachCastControl(player, {
+        onPromptStart() { suppressProgressSaves = true; },
+        onPromptEnd() { suppressProgressSaves = false; },
+      });
       const onPageHide = () => saveProgress(track.slug, audio, true);
       const onPlay = () => {
         if (typeof player.initMediaSession === "function") player.initMediaSession();
