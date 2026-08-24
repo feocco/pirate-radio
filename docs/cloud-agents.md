@@ -32,6 +32,15 @@ substackcdn.com
 *.substackcdn.com
 ```
 
+`docker build` additionally needs the Microsoft container registry **and** the
+blob CDN it redirects to. `mcr.microsoft.com` alone is not sufficient — the
+manifest resolves but every layer download fails:
+
+```
+mcr.microsoft.com
+*.data.mcr.microsoft.com
+```
+
 The allowlist is enforced at **VM boot**, so changes take effect on the next
 freshly-booted agent (not a run already in progress).
 

@@ -1,5 +1,6 @@
 import type { LibraryItem } from "./library.js";
 import { attachCastControl } from "./mediaPlayerCast.js";
+import { ACCENT } from "./theme.js";
 
 export interface MediaPlayerTrack {
   slug: string;
@@ -119,7 +120,7 @@ export function renderMediaPlayerClient(userId?: string): string {
       const player = new Player({
         container,
         fixed: { type: "static" },
-        themeColor: "#58ad5c",
+        themeColor: ${JSON.stringify(ACCENT)},
         download: true,
         preload: "metadata",
         speedOptions: [0.75, 1, 1.25, 1.5, 1.75, 2],
