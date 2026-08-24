@@ -100,10 +100,11 @@ const sharedCss = `
   h1 { font-size: var(--text-4xl); font-weight: 800; letter-spacing: -.03em; max-width: 20ch; }
   .deck { max-width: 62ch; margin-top: var(--space-3); font-size: var(--text-xl); line-height: 1.4; color: var(--ink-muted); }
 
-  .library { display: grid; gap: 0; margin: var(--space-4) auto var(--space-6); border-top: 2px solid var(--rule); }
-  .item { display: grid; grid-template-columns: minmax(0, 260px) 1fr; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: 1px solid var(--rule-soft); }
-  .thumb { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: var(--paper-sunken); border: 1px solid var(--rule-soft); display: block; }
+  .library { display: grid; gap: var(--space-4); margin: var(--space-4) auto var(--space-6); }
+  .item { display: grid; grid-template-columns: minmax(0, 300px) 1fr; grid-template-rows: auto auto; gap: 0; padding: 0; border: 1px solid var(--rule-soft); background: var(--paper-raised); overflow: hidden; }
+  .thumb { grid-column: 1; grid-row: 1; width: 100%; height: 100%; min-height: 190px; object-fit: cover; background: var(--paper-sunken); border: 0; display: block; }
   .thumb.placeholder { display: grid; place-items: center; color: var(--ink-faint); font-weight: 800; font-size: 28px; letter-spacing: .04em; }
+  .item-body { grid-column: 2; grid-row: 1; min-width: 0; padding: var(--space-4); }
   .item h2 { font-size: var(--text-2xl); font-weight: 800; }
   .item h2 a { text-decoration: none; }
   .item h2 a:hover { color: var(--accent); }
@@ -116,21 +117,21 @@ const sharedCss = `
   .media-player .shk-text { min-width: 0; }
   .media-player .shk-controls { max-width: 100%; }
   .item, .item > *, .player-panel { min-width: 0; max-width: 100%; }
-  /* A library row already carries the cover, source and title, so the compact
-     variant drops the player's copies of them and keeps only the transport.
-     Shikwasa fixes .shk-player's height and centres .shk-controls with an auto
-     margin, both of which have to be released for the strip to collapse. */
+  /* The card already carries the cover, source and title, so its player keeps
+     only the transport. Shikwasa fixes .shk-player's height and centres
+     .shk-controls with an auto margin; both have to be released before the
+     transport can participate in the card footer. */
   .media-player.compact .shk-cover,
   .media-player.compact .shk-text { display: none; }
   .media-player.compact .shk { border: 0; background: transparent; }
   .media-player.compact .shk-player { height: auto; padding: 12px 0 0; background: transparent; box-shadow: none; }
   .media-player.compact .shk-body { height: auto; }
-  .media-player.compact .shk-main { max-width: none; padding: 0; align-items: center; }
-  .media-player.compact .shk-controls { margin: 0; width: auto; }
+  .media-player.compact .shk-main { max-width: none; padding: 0; align-items: center; justify-content: center; }
+  .media-player.compact .shk-controls { width: 280px; margin: 0 auto; }
   .media-player.compact .shk-display { right: 0; }
-  .item-controls { display: flex; align-items: center; gap: var(--space-4); min-width: 0; margin-top: var(--space-3); }
-  .item-controls .actions { flex: 0 0 auto; margin-top: 0; }
-  .item-controls .media-player { flex: 1 1 auto; min-width: 0; margin-top: 0; }
+  .card-player-footer { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-4); min-width: 0; padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule-soft); }
+  .card-player-footer .actions { margin: 0; white-space: nowrap; }
+  .card-player-footer .media-player { min-width: 0; margin: 0; }
   /* Shikwasa writes the accent to an inline --color-primary, so the override
      has to win on specificity for the dark-scheme accent to apply. */
   .media-player .shk {
@@ -207,8 +208,9 @@ const sharedCss = `
   @media (max-width: 760px) {
     .topbar-inner { gap: var(--space-3); }
     .item { grid-template-columns: 1fr; }
-    .item-controls { display: block; }
-    .item-controls .media-player { margin-top: var(--space-2); }
+    .item > .thumb { grid-column: 1; grid-row: 1; height: auto; min-height: 0; aspect-ratio: 16 / 10; }
+    .item-body { grid-column: 1; grid-row: 2; padding: var(--space-3); }
+    .card-player-footer { grid-column: 1; grid-row: 3; grid-template-columns: 1fr; gap: var(--space-3); padding: var(--space-3); }
     .toolbar { align-items: stretch; }
     .select, .search { width: 100%; }
     .url-queue, .text-queue { grid-template-columns: 1fr; }
@@ -348,6 +350,7 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
       }
 
       const content = document.createElement("div");
+      content.className = "item-body";
       const heading = document.createElement("h2");
       const headingLink = document.createElement("a");
       headingLink.href = "/article/" + encodeURIComponent(item.slug);
@@ -373,14 +376,13 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
       const playerHost = document.createElement("div");
       playerHost.className = "media-player compact";
       libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item)));
-      const controls = document.createElement("div");
-      controls.className = "item-controls";
+      const footer = document.createElement("div");
+      footer.className = "card-player-footer";
       actions.append(readLink, downloadLink);
-      controls.append(actions, playerHost);
+      footer.append(actions, playerHost);
       content.append(heading, meta);
       if (item.tagline) content.append(tagline);
-      content.append(controls);
-      section.append(image, content);
+      section.append(image, content, footer);
       root.append(section);
     }
 

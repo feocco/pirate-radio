@@ -105,9 +105,13 @@ describe("reader page", () => {
     expect(html).toContain("Article date");
     expect(html).toContain("item.imageUrl");
     expect(html).toContain("mountMediaPlayer(playerHost, mediaPlayerTrack(item))");
+    expect(html).toContain('content.className = "item-body"');
     expect(html).toContain('playerHost.className = "media-player compact"');
-    expect(html).toContain("controls.append(actions, playerHost)");
-    expect(html).toContain(".media-player.compact .shk-controls { margin: 0; width: auto; }");
+    expect(html).toContain('footer.className = "card-player-footer"');
+    expect(html).toContain("footer.append(actions, playerHost)");
+    expect(html).toContain("section.append(image, content, footer)");
+    expect(html).toContain(".media-player.compact .shk-controls { width: 280px; margin: 0 auto; }");
+    expect(html).toContain(".card-player-footer { grid-column: 1 / -1;");
     expect(html).toContain("libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item)))");
     expect(html).toContain("destroyLibraryPlayers()");
     expect(html).toContain("mounted.destroy()");
