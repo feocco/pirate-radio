@@ -4,10 +4,10 @@ import { splitSpeechInput } from "./chunk.js";
 import { assertWithinBudget } from "./cost.js";
 import { wordsFromGraphTimestamps } from "./timestamps.js";
 import type { TimedWord, TtsProvider, TtsRequest, TtsResult } from "./types.js";
+import { mapXaiHttpError, nextChunkTimeOffset, XAI_TIMEOUT_MS } from "./xaiHttp.js";
 
 const XAI_TTS_URL = "https://api.x.ai/v1/tts";
 const TTS_LANGUAGE = "en";
-const TTS_TIMEOUT_MS = 60_000;
 
 interface XaiTimestampResponse {
   audio: string;
@@ -43,7 +43,7 @@ export class XaiTtsProvider implements TtsProvider {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.endpoint = options.endpoint ?? XAI_TTS_URL;
     this.language = options.language ?? TTS_LANGUAGE;
-    this.timeoutMs = options.timeoutMs ?? TTS_TIMEOUT_MS;
+    this.timeoutMs = options.timeoutMs ?? XAI_TIMEOUT_MS;
   }
 
   async synthesize(request: TtsRequest): Promise<TtsResult> {
@@ -81,17 +81,13 @@ export class XaiTtsProvider implements TtsProvider {
       });
 
       if (!response.ok) {
-        throw new Error(`xAI TTS request failed: ${response.status} ${await response.text()}`);
+        throw mapXaiHttpError("tts", response.status, await response.text());
       }
 
       const parsed = await parseTtsResponse(response, Boolean(request.includeTimestamps), timeOffset);
       buffers.push(parsed.audio);
       allWords.push(...parsed.words);
-      if (parsed.duration != null) {
-        timeOffset += parsed.duration;
-      } else if (parsed.words.length > 0) {
-        timeOffset = parsed.words[parsed.words.length - 1]!.end;
-      }
+      timeOffset = nextChunkTimeOffset(timeOffset, parsed);
     }
 
     await writeFile(request.outputPath, Buffer.concat(buffers));

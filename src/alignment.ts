@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import type { TimedWord } from "./tts/types.js";
+import { mapXaiHttpError, XAI_TIMEOUT_MS } from "./tts/xaiHttp.js";
 
 export interface AlignmentResult {
   words: TimedWord[];
@@ -49,10 +50,11 @@ async function transcribeWithXai(audioPath: string): Promise<AlignmentResult> {
       Authorization: `Bearer ${apiKey}`,
     },
     body: formData,
+    signal: AbortSignal.timeout(XAI_TIMEOUT_MS),
   });
 
   if (!response.ok) {
-    throw new Error(`xAI STT request failed: ${response.status} ${await response.text()}`);
+    throw mapXaiHttpError("stt", response.status, await response.text());
   }
 
   const payload = (await response.json()) as {
