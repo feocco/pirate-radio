@@ -281,6 +281,72 @@ describe("XaiTtsProvider", () => {
     }
   });
 
+  test("maps provider HTTP errors without leaking response bodies", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-xai-tts-"));
+    const secret = "secret-user-prompt-should-not-leak";
+    const provider = new XaiTtsProvider({
+      apiKey: "test-key",
+      fetchImpl: async () =>
+        new Response(`${secret}${"x".repeat(400)}`, {
+          status: 403,
+          headers: { "Content-Type": "text/plain" },
+        }),
+    });
+
+    const error = await provider
+      .synthesize({
+        title: "Story",
+        text: "Body",
+        outputPath: join(tempDir, "story.mp3"),
+        allowOverBudget: false,
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe("xAI tts failed (403)");
+    expect((error as Error).message).not.toContain(secret);
+  });
+
+  test("advances timeOffset across a chunk that returns audio without timestamps", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-xai-tts-"));
+    const outputPath = join(tempDir, "audio", "offset.mp3");
+    let call = 0;
+    const silentChunk = Buffer.alloc(32_000, 1);
+
+    const provider = new XaiTtsProvider({
+      apiKey: "test-key",
+      fetchImpl: async () => {
+        call += 1;
+        if (call === 1) {
+          return Response.json({
+            audio: silentChunk.toString("base64"),
+          });
+        }
+        return Response.json({
+          audio: Buffer.from("chunk-two").toString("base64"),
+          audio_timestamps: {
+            graph_chars: ["H", "i"],
+            graph_times: [
+              [0, 0.2],
+              [0.2, 0.4],
+            ],
+          },
+          duration: 0.4,
+        });
+      },
+    });
+
+    const result = await provider.synthesize({
+      title: "Chunked",
+      text: `${"word ".repeat(1600)}\n\n${"word ".repeat(1600)}`,
+      outputPath,
+      allowOverBudget: true,
+      includeTimestamps: true,
+    });
+
+    expect(result.words).toEqual([{ word: "Hi", start: 2, end: 2.4 }]);
+  });
+
   test("throws when XAI_API_KEY is missing", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "pirate-xai-tts-"));
     const provider = new XaiTtsProvider({ apiKey: "" });
