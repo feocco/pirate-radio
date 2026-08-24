@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Launches `serve` for the local dev stack (runs as a `terminal`).
-# Waits for the local OIDC issuer, then selects feeds: real public feeds when
-# they are reachable (egress allowlist), falling back to the local feed so the
-# startup RSS poll cannot crash `serve` on a blocked host.
+# Waits for application database readiness and the local OIDC issuer, then
+# selects feeds: real public feeds when they are reachable (egress allowlist),
+# falling back to the local feed so the startup RSS poll cannot crash `serve`
+# on a blocked host.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 # shellcheck source=scripts/dev/env.sh
 source scripts/dev/env.sh
+
+bash scripts/dev/wait-for-database.sh || exit 1
 
 echo "[serve] waiting for local OIDC issuer at $PIRATE_RADIO_OIDC_ISSUER ..."
 for _ in $(seq 1 60); do
