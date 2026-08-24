@@ -116,9 +116,10 @@ export async function handleArticleDecision(
     text: story.text,
     outputPath: audioPath,
     allowOverBudget: false,
+    ...(input.enableAlignment ? { includeTimestamps: true } : {}),
   });
   const alignment = input.enableAlignment
-    ? await tryWriteAlignment(input.libraryDir, slug, ttsResult.outputPath)
+    ? await tryWriteAlignment(input.libraryDir, slug, ttsResult)
     : undefined;
 
   const manifest = await appendLibraryItem(input.libraryDir, {
@@ -184,9 +185,10 @@ export async function createCustomTextAudio(
     text: story.text,
     outputPath: audioPath,
     allowOverBudget: false,
+    ...(input.enableAlignment ? { includeTimestamps: true } : {}),
   });
   const alignment = input.enableAlignment
-    ? await tryWriteAlignment(input.libraryDir, slug, ttsResult.outputPath)
+    ? await tryWriteAlignment(input.libraryDir, slug, ttsResult)
     : undefined;
 
   const manifest = await appendLibraryItem(input.libraryDir, {
@@ -359,10 +361,15 @@ async function tryCacheStoryImage(
 async function tryWriteAlignment(
   libraryDir: string,
   slug: string,
-  audioPath: string,
+  ttsResult: TtsResult,
 ): Promise<{ alignmentPath: string; alignmentUrl: string } | undefined> {
   try {
-    return await writeAlignment({ libraryDir, slug, audioPath });
+    return await writeAlignment({
+      libraryDir,
+      slug,
+      audioPath: ttsResult.outputPath,
+      ...(ttsResult.words ? { words: ttsResult.words } : {}),
+    });
   } catch (error) {
     console.warn(`[pirate-radio] alignment failed for ${slug}: ${(error as Error).message}`);
     return undefined;

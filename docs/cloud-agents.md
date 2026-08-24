@@ -46,7 +46,7 @@ freshly-booted agent (not a run already in progress).
 
 ### Secrets
 
-`OPENAI_API_KEY` was added as a **personal (user) secret**. It powers on-demand
+`XAI_API_KEY` was added as a **personal (user) secret**. It powers on-demand
 TTS conversions in the running app and the optional real-data harvest, and is
 **not** required for the committed seed (audio is baked into the repo). User
 secrets are injected at **agent start** and are **not** available during a Build.
@@ -115,7 +115,7 @@ Cross-cutting:
 ## 5. How this maps to seeded / real data
 
 - Committed `scripts/dev/seed-assets/` gives deterministic, cost-free seeding on
-  every run (no OpenAI call at runtime).
+  every run (no xAI call at runtime).
 - To refresh with real articles: on a freshly-booted agent (feed domains now
   allowlisted) run `node scripts/dev/harvest.mjs` to regenerate the fixtures
   from live RSS, then commit them.

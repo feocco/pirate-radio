@@ -158,7 +158,7 @@ export class PirateRadioService {
 
   async decide(slug: string, decision: PirateRadioDecision, submissionId?: string): Promise<void> {
     const state = await this.getState();
-    const provider = createTtsProvider("openai");
+    const provider = createTtsProvider();
     let effectiveSubmissionId = submissionId;
     if (!effectiveSubmissionId && decision === "accept" && this.database) {
       const article = findArticleBySlug(state, slug);
@@ -446,7 +446,7 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
           submittedBy: principal.user,
         });
         await options.store.updateSubmission(submission.id, "processing");
-        const provider = createTtsProvider("openai");
+        const provider = createTtsProvider();
         void createCustomTextAudio({
           title: validation.title,
           text: validation.text,
@@ -585,7 +585,7 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       if (decisionName === "refresh" && slug) {
         const regenerateAudio = url.searchParams.get("regenerateAudio") === "true";
         const notify = url.searchParams.get("notify") === "true";
-        const provider = regenerateAudio ? createTtsProvider("openai") : undefined;
+        const provider = regenerateAudio ? createTtsProvider() : undefined;
         const result = await refreshLibraryArticle({
           slug,
           libraryDir: options.config.libraryDir,

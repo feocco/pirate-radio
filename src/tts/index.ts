@@ -1,12 +1,18 @@
-import { OpenAiTtsProvider } from "./openai.js";
+import { XaiTtsProvider } from "./xai.js";
 import type { TtsProvider } from "./types.js";
 
-export function createTtsProvider(providerName: string): TtsProvider {
-  if (providerName === "openai") {
-    return new OpenAiTtsProvider();
+export const DEFAULT_TTS_PROVIDER = "xai";
+
+export function createTtsProvider(providerName = DEFAULT_TTS_PROVIDER): TtsProvider {
+  if (providerName === "xai") {
+    return new XaiTtsProvider();
   }
 
-  throw new Error(`Unsupported TTS provider "${providerName}". Available providers: openai.`);
+  throw new Error(`Unsupported TTS provider "${providerName}". Available providers: xai.`);
 }
 
-export type { TtsProvider, TtsRequest, TtsResult } from "./types.js";
+export { XaiTtsProvider, type XaiTtsProviderOptions } from "./xai.js";
+export { splitSpeechInput } from "./chunk.js";
+export { wordsFromGraphTimestamps } from "./timestamps.js";
+export { mapXaiHttpError, nextChunkTimeOffset, XAI_TIMEOUT_MS } from "./xaiHttp.js";
+export type { TimedWord, TtsProvider, TtsRequest, TtsResult } from "./types.js";

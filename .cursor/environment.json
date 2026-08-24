@@ -4,7 +4,7 @@
   "terminals": [
     {
       "name": "oidc",
-      "command": "bash scripts/dev/oidc.sh"
+      "command": "bash -lc 'source scripts/dev/env.sh && exec node scripts/dev/local-oidc.mjs'"
     },
     {
       "name": "serve",

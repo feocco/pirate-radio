@@ -27,7 +27,7 @@ The app reads configuration from environment variables.
 | `PWR_HEADLESS` | unset | Set to `true` for Docker/headless Playwright. |
 | `PWR_PROFILE_DIR` | `.playwright-profile` | Playwright browser profile path. Use a durable mounted path in Docker. |
 | `X_API_BEARER_TOKEN` | none | App-only X API bearer token required for pasted X Article conversions. |
-| `OPENAI_API_KEY` | none | Required for approved TTS generation. |
+| `XAI_API_KEY` | none | Required for approved TTS generation. |
 | `HA_URL` | none | Home Assistant base URL. |
 | `HA_LONG_LIVED_TOKEN` | none | Home Assistant WebSocket token. |
 | `HOMELAB_FUNCTIONS_URL` | none | Notification broker URL. |

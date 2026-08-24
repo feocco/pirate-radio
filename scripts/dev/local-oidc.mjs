@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateKeyPair, exportJWK, SignJWT } from "jose";
+import { buildSubjectAltName } from "../../dist/src/dev/oidcCert.js";
 
 // GUARDRAIL: this issuer auto-approves logins and mints an admin identity. It is
 // only allowed in the dev stack, never in a real deployment.
@@ -52,14 +53,10 @@ const certPath = join(devDir, "oidc-cert.pem");
 function ensureCert() {
   if (existsSync(keyPath) && existsSync(certPath)) return;
   mkdirSync(devDir, { recursive: true });
-  // openssl rejects `IP:` entries that are not IP literals, so a DNS host such
-  // as the default `localhost` has to be declared as `DNS:`.
-  const isIpLiteral = /^[0-9.]+$/.test(HOST) || HOST.includes(":");
-  const names = new Set([isIpLiteral ? `IP:${HOST}` : `DNS:${HOST}`, "DNS:localhost", "IP:127.0.0.1"]);
   execFileSync("openssl", [
     "req", "-x509", "-newkey", "rsa:2048", "-nodes",
     "-keyout", keyPath, "-out", certPath, "-days", "30",
-    "-subj", `/CN=${HOST}`, "-addext", `subjectAltName=${[...names].join(",")}`,
+    "-subj", `/CN=${HOST}`, "-addext", `subjectAltName=${buildSubjectAltName(HOST)}`,
   ], { stdio: "ignore" });
 }
 

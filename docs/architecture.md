@@ -46,8 +46,8 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/haActions.ts`: Home Assistant WebSocket listener.
 - `src/workflow.ts`: article decision handling.
 - `src/assets.ts`: article image caching and asset content types.
-- `src/alignment.ts`: optional OpenAI Whisper word-timing artifact writer.
-- `src/tts/`: provider interface and OpenAI implementation.
+- `src/alignment.ts`: optional xAI STT word-timing artifact writer (TTS timestamps preferred).
+- `src/tts/`: provider interface and xAI implementation.
 - `src/library.ts`: durable manifest writer.
 - `src/mediaPlayer.ts`: shared Shikwasa media player for library and article
   views, including metadata escaping, playback-progress wiring, and a Cast
@@ -118,8 +118,8 @@ but normal cross-device state is `GET/PUT /progress/<slug>` in Postgres.
 
 ## Alignment Prototype
 
-OpenAI speech generation does not currently return word timing metadata with
-the MP3. The optional prototype uses the generated MP3 as input to OpenAI
-speech-to-text with `whisper-1`, `response_format=verbose_json`, and
-word-level timestamps. The reader consumes alignment JSON only when present and
+xAI speech generation can return word timing metadata when
+`with_timestamps` is enabled on TTS. The optional prototype prefers those
+timestamps from synthesis. When they are unavailable, it falls back to the
+generated MP3 as input to xAI speech-to-text. The reader consumes alignment JSON only when present and
 falls back to ordinary article text otherwise.
