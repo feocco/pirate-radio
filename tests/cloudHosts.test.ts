@@ -34,16 +34,18 @@ describe("cloud host adapter factory", () => {
       })),
       listArtifacts: async () => [{ path: "artifacts/story.json" }],
       downloadArtifact: async () =>
-        Buffer.from(
-          JSON.stringify({
-            title: "We Must Pace the Frontier",
-            text: "I think we should pace.\n\nThat is the work.",
-            sourceUrl,
-            characterCount: 10,
-            wordCount: 2,
-            extractedAt: "2026-09-13T12:00:00.000Z",
-            selectors: ["article", "main .post"],
-          }),
+        new Uint8Array(
+          Buffer.from(
+            JSON.stringify({
+              title: "We Must Pace the Frontier",
+              text: "I think we should pace.\n\nThat is the work.",
+              sourceUrl,
+              characterCount: 10,
+              wordCount: 2,
+              extractedAt: "2026-09-13T12:00:00.000Z",
+              selectors: ["article", "main .post"],
+            }),
+          ),
         ),
       close: vi.fn(),
     }));
@@ -96,7 +98,7 @@ describe("cloud host adapter factory", () => {
       agentId: "bc-adapter",
       send,
       listArtifacts: async () => [],
-      downloadArtifact: async () => Buffer.from(""),
+      downloadArtifact: async () => new Uint8Array(),
       close: vi.fn(),
     }));
 

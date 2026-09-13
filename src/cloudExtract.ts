@@ -21,6 +21,8 @@ export const CLOUD_EXTRACT_FAILURE_MESSAGE =
 export const CLOUD_EXTRACT_TIMEOUT_MESSAGE =
   "Cloud extract timed out. The article was not added to the library.";
 
+export const HOST_ADAPTER_TIMEOUT_MESSAGE = "Host adapter agent timed out.";
+
 export const CLOUD_AGENT_TIMEOUT_MS = 10 * 60 * 1000;
 
 export const CLOUD_EXTRACT_SOURCE_TYPE = "cloud-extract" as const;
@@ -324,6 +326,7 @@ export async function proposeHostAdapter(input: {
   apiKey?: string;
   createAgent?: CloudAgentFactory;
   repoUrl?: string;
+  timeoutMs?: number;
 }): Promise<{ host: string; agentId?: string; prUrl?: string }> {
   const { markCloudHostAdapterRequested, normalizeCloudHost, readCloudHostStore } = await import("./cloudHosts.js");
   const host = normalizeCloudHost(input.hostOrUrl);
@@ -351,7 +354,10 @@ export async function proposeHostAdapter(input: {
         fingerprint: existing?.fingerprint,
       }),
     );
-    const result = await run.wait();
+    const result = await waitForCloudAgent(() => run.wait(), {
+      timeoutMs: input.timeoutMs,
+      timeoutMessage: HOST_ADAPTER_TIMEOUT_MESSAGE,
+    });
     if (result.status !== "finished") {
       throw new Error(result.error?.message || "Host adapter agent failed.");
     }

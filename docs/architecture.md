@@ -116,8 +116,9 @@ duplicate identity settings UI.
 
 Postgres owns users, hashed sessions, one-time OIDC transactions, per-user
 progress/completion, submissions, and migration receipts. One shared filesystem
-library still owns MP3, story JSON/text, images, alignment, `index.json`, and
-RSS `state.json`. `progress.json` is retained only as migration/rollback input.
+library still owns MP3, story JSON/text, images, alignment, `index.json`,
+RSS `state.json`, and `cloud-hosts.json`. `progress.json` is retained only as
+migration/rollback input.
 Story JSON and `index.json` preserve an optional article author. Feed metadata
 backs RSS conversions; pasted HTML uses page author metadata; missing authors
 remain absent rather than displaying an unknown placeholder.
