@@ -1,5 +1,5 @@
 import { isXHostname } from "./xArticle.js";
-import { slugFromUrl } from "./slug.js";
+import { sanitizeSlug, slugFromUrl } from "./slug.js";
 import type { Story, StoryContentBlock } from "./types.js";
 
 export type UnsupportedArticleUrlClassification =
@@ -17,6 +17,13 @@ export const MISSING_CURSOR_API_KEY_MESSAGE =
 
 export const CLOUD_EXTRACT_FAILURE_MESSAGE =
   "Cloud extract failed. The article was not added to the library.";
+
+export const CLOUD_EXTRACT_TIMEOUT_MESSAGE =
+  "Cloud extract timed out. The article was not added to the library.";
+
+export const HOST_ADAPTER_TIMEOUT_MESSAGE = "Host adapter agent timed out.";
+
+export const CLOUD_AGENT_TIMEOUT_MS = 10 * 60 * 1000;
 
 export const CLOUD_EXTRACT_SOURCE_TYPE = "cloud-extract" as const;
 
@@ -39,14 +46,18 @@ export interface CloudAgentRunResult {
   status: "finished" | "error" | "cancelled" | string;
   result?: string;
   error?: { message?: string };
+  git?: { branches?: Array<{ repoUrl?: string; branch?: string; prUrl?: string }> };
 }
 
 export interface CloudAgentHandle {
+  agentId?: string;
   send(message: string): Promise<{ wait(): Promise<CloudAgentRunResult> }>;
   listArtifacts(): Promise<Array<{ path: string }>>;
-  downloadArtifact(path: string): Promise<Buffer>;
+  downloadArtifact(path: string): Promise<Uint8Array>;
   close(): void;
 }
+
+export const PIRATE_RADIO_REPO_URL = "https://github.com/feocco/pirate-radio";
 
 export interface CloudAgentCreateInput {
   apiKey: string;
@@ -86,6 +97,38 @@ export function hostDisplayName(hostname: string): string {
   return hostname.replace(/^www\./i, "");
 }
 
+export function cloudExtractSlug(url: string): string {
+  const parsed = new URL(url);
+  const host = sanitizeSlug(hostDisplayName(parsed.hostname));
+  const path = slugFromUrl(url);
+  return sanitizeSlug(`${host}-${path}`);
+}
+
+export function decodeArtifactBytes(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("utf8");
+}
+
+export async function waitForCloudAgent(
+  wait: () => Promise<CloudAgentRunResult>,
+  options: { timeoutMs?: number; timeoutMessage?: string } = {},
+): Promise<CloudAgentRunResult> {
+  const timeoutMs = options.timeoutMs ?? CLOUD_AGENT_TIMEOUT_MS;
+  const timeoutMessage = options.timeoutMessage ?? CLOUD_EXTRACT_TIMEOUT_MESSAGE;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      wait(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
 export function classifyUnsupportedHttpsArticleUrl(value: string): UnsupportedArticleUrlClassification {
   let url: URL;
   try {
@@ -115,7 +158,7 @@ export function classifyUnsupportedHttpsArticleUrl(value: string): UnsupportedAr
   return {
     ok: true,
     url: url.toString(),
-    slug: slugFromUrl(url.toString()),
+    slug: cloudExtractSlug(url.toString()),
     sourceType: CLOUD_EXTRACT_SOURCE_TYPE,
     sourceName: hostDisplayName(url.hostname),
   };
@@ -193,6 +236,209 @@ export function parseCloudExtractArtifact(
     },
     ...(selectors ? { selectors } : {}),
   };
+}
+
+export async function extractStoryViaCloud(
+  request: CloudExtractRequest,
+  options: {
+    apiKey?: string;
+    createAgent?: CloudAgentFactory;
+    now?: () => Date;
+    timeoutMs?: number;
+  } = {},
+): Promise<ParsedCloudExtract> {
+  const apiKey = options.apiKey ?? cursorApiKeyFromEnv();
+  if (!apiKey) {
+    throw new Error(MISSING_CURSOR_API_KEY_MESSAGE);
+  }
+
+  const createAgent = options.createAgent ?? createCursorSdkAgent;
+  const agent = await createAgent({
+    apiKey,
+    cloud: { repos: [] },
+  });
+
+  try {
+    const run = await agent.send(buildCloudExtractPrompt(request));
+    const result = await waitForCloudAgent(() => run.wait(), {
+      timeoutMs: options.timeoutMs,
+    });
+    if (result.status !== "finished") {
+      throw new Error(result.error?.message || CLOUD_EXTRACT_FAILURE_MESSAGE);
+    }
+
+    const artifactPath = pickStoryArtifactPath(await agent.listArtifacts());
+    if (!artifactPath) {
+      throw new Error("Cloud extract finished without a Story JSON artifact.");
+    }
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(decodeArtifactBytes(await agent.downloadArtifact(artifactPath)));
+    } catch (error) {
+      throw new Error(
+        error instanceof Error && error.message.includes("JSON")
+          ? error.message
+          : "Cloud extract artifact is not valid JSON.",
+      );
+    }
+
+    return parseCloudExtractArtifact(raw, request.url, request.anchors, options.now);
+  } finally {
+    agent.close();
+  }
+}
+
+export function buildHostAdapterPrompt(input: {
+  host: string;
+  sourceUrl?: string;
+  fingerprint?: { anchors?: CloudExtractAnchors; selectors?: string[] };
+}): string {
+  const lines = [
+    `Add a first-class Pirate Radio host adapter for ${input.host}.`,
+    "Open a pull request. Do not merge or enable auto-merge.",
+    "",
+    "Reuse the public HTML extract path in src/extractor.ts and src/browser.ts.",
+    "Follow the Substack/public fetch pattern, not Playwright, unless the host is paywalled.",
+    "Do not scrape X. X Articles stay on the official Post lookup API.",
+    "Do not add Mozilla Readability as a generic product path.",
+    "Keep validateArticleUrl, library sourceType, and the queue convert-url path in sync.",
+    "Cover the new host with focused tests.",
+  ];
+  if (input.sourceUrl) {
+    lines.push(`Example URL from a successful cloud extract: ${input.sourceUrl}`);
+  }
+  if (input.fingerprint?.selectors?.length) {
+    lines.push(`Selectors observed during cloud extract: ${input.fingerprint.selectors.join(", ")}`);
+  }
+  if (input.fingerprint?.anchors?.firstSentence) {
+    lines.push(`First-sentence anchor that worked: ${input.fingerprint.anchors.firstSentence}`);
+  }
+  if (input.fingerprint?.anchors?.lastSentence) {
+    lines.push(`Last-sentence anchor that worked: ${input.fingerprint.anchors.lastSentence}`);
+  }
+  return lines.join("\n");
+}
+
+const adapterHostsInFlight = new Set<string>();
+
+export type QueueHostAdapterProposalResult =
+  | { ok: true; status: "queued" | "processing" | "opened"; host: string; prUrl?: string }
+  | { ok: false; error: string };
+
+export async function queueHostAdapterProposal(input: {
+  hostOrUrl: string;
+  libraryDir: string;
+  apiKey?: string;
+  createAgent?: CloudAgentFactory;
+  repoUrl?: string;
+  timeoutMs?: number;
+}): Promise<QueueHostAdapterProposalResult> {
+  const { normalizeCloudHost, readCloudHostStore } = await import("./cloudHosts.js");
+  let host: string;
+  try {
+    host = normalizeCloudHost(input.hostOrUrl);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Enter a host or https URL.",
+    };
+  }
+
+  const apiKey = input.apiKey ?? cursorApiKeyFromEnv();
+  if (!apiKey) {
+    return { ok: false, error: MISSING_CURSOR_API_KEY_MESSAGE };
+  }
+
+  const existing = (await readCloudHostStore(input.libraryDir)).hosts[host];
+  if (existing?.adapterPrUrl) {
+    return { ok: true, status: "opened", host, prUrl: existing.adapterPrUrl };
+  }
+  if (adapterHostsInFlight.has(host)) {
+    return { ok: true, status: "processing", host };
+  }
+
+  adapterHostsInFlight.add(host);
+  void proposeHostAdapter({
+    ...input,
+    hostOrUrl: host,
+    apiKey,
+  }).catch((error) => {
+    console.error(
+      `[pirate-radio] adapter agent failed for ${host}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }).finally(() => {
+    adapterHostsInFlight.delete(host);
+  });
+
+  return { ok: true, status: "queued", host };
+}
+
+export async function proposeHostAdapter(input: {
+  hostOrUrl: string;
+  libraryDir: string;
+  apiKey?: string;
+  createAgent?: CloudAgentFactory;
+  repoUrl?: string;
+  timeoutMs?: number;
+}): Promise<{ host: string; agentId?: string; prUrl?: string }> {
+  const { markCloudHostAdapterRequested, normalizeCloudHost, readCloudHostStore } = await import("./cloudHosts.js");
+  const host = normalizeCloudHost(input.hostOrUrl);
+  const apiKey = input.apiKey ?? cursorApiKeyFromEnv();
+  if (!apiKey) {
+    throw new Error(MISSING_CURSOR_API_KEY_MESSAGE);
+  }
+
+  const store = await readCloudHostStore(input.libraryDir);
+  const existing = store.hosts[host];
+  const createAgent = input.createAgent ?? createCursorSdkAgent;
+  const agent = await createAgent({
+    apiKey,
+    cloud: {
+      repos: [{ url: input.repoUrl ?? PIRATE_RADIO_REPO_URL, startingRef: "main" }],
+      autoCreatePR: true,
+    },
+  });
+
+  try {
+    const run = await agent.send(
+      buildHostAdapterPrompt({
+        host,
+        sourceUrl: existing?.lastSourceUrl,
+        fingerprint: existing?.fingerprint,
+      }),
+    );
+    const result = await waitForCloudAgent(() => run.wait(), {
+      timeoutMs: input.timeoutMs,
+      timeoutMessage: HOST_ADAPTER_TIMEOUT_MESSAGE,
+    });
+    if (result.status !== "finished") {
+      throw new Error(result.error?.message || "Host adapter agent failed.");
+    }
+    const prUrl = result.git?.branches?.find((branch) => branch.prUrl)?.prUrl;
+    const record = await markCloudHostAdapterRequested({
+      libraryDir: input.libraryDir,
+      host,
+      agentId: agent.agentId,
+      ...(prUrl ? { prUrl } : {}),
+    });
+    return {
+      host: record.host,
+      ...(record.adapterAgentId ? { agentId: record.adapterAgentId } : {}),
+      ...(record.adapterPrUrl ? { prUrl: record.adapterPrUrl } : {}),
+    };
+  } finally {
+    agent.close();
+  }
+}
+
+export async function createCursorSdkAgent(input: CloudAgentCreateInput): Promise<CloudAgentHandle> {
+  const { Agent } = await import("@cursor/sdk");
+  return Agent.create({
+    apiKey: input.apiKey,
+    cloud: input.cloud,
+  });
 }
 
 export function pickStoryArtifactPath(artifacts: Array<{ path: string }>): string | undefined {

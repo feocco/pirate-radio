@@ -8,7 +8,7 @@ The app reads configuration from environment variables.
 | `SERVICE_HOST` | falls back to `HOST_BIND_ADDR` | In-container/app bind address. Use `0.0.0.0` in Docker. |
 | `HOST_BIND_ADDR` | `127.0.0.1` | HTTP bind address. |
 | `PIRATE_RADIO_PUBLIC_URL` | local service URL | URL placed in notifications. |
-| `PIRATE_RADIO_LIBRARY_DIR` | `output/library` | Durable text, JSON, audio, cached images, optional alignment, legacy progress, and manifest root. |
+| `PIRATE_RADIO_LIBRARY_DIR` | `output/library` | Durable text, JSON, audio, cached images, optional alignment, legacy progress, host fingerprints (`cloud-hosts.json`), and manifest root. |
 | `PIRATE_RADIO_STATE_PATH` | `<library>/state.json` | Seen/pending/decision state file. |
 | `PIRATE_RADIO_FEED_URL` | Pirate Wires RSS feed | Legacy/simple single-feed override. If set without `PIRATE_RADIO_FEEDS`, only Pirate Wires is polled at this URL. |
 | `PIRATE_RADIO_FEEDS` | Pirate Wires + Hyperdimensional | JSON array of `{ "id", "name", "type", "url" }` feed configs. `type` is `pirate-wires` or `substack`. |
@@ -28,7 +28,7 @@ The app reads configuration from environment variables.
 | `PWR_PROFILE_DIR` | `.playwright-profile` | Playwright browser profile path. Use a durable mounted path in Docker. |
 | `X_API_BEARER_TOKEN` | none | App-only X API bearer token required for pasted X Article conversions. |
 | `XAI_API_KEY` | none | Required for approved TTS generation. |
-| `CURSOR_API_KEY` | none | Cursor user or unrestricted service-account key used by `src/cloudExtract.ts` to launch no-repo Cloud Agents for unsupported article URLs. |
+| `CURSOR_API_KEY` | none | Cursor user or unrestricted service-account key used by `src/cloudExtract.ts` to launch no-repo Cloud Agents for unsupported article URLs. The extract wait fails closed after 10 minutes. |
 | `HA_URL` | none | Home Assistant base URL. |
 | `HA_LONG_LIVED_TOKEN` | none | Home Assistant WebSocket token. |
 | `HOMELAB_FUNCTIONS_URL` | none | Notification broker URL. |

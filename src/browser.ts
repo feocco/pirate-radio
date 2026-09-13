@@ -1,8 +1,21 @@
 import { chromium } from "playwright";
 import { validateArticleUrl } from "./backlog.js";
+import {
+  extractStoryViaCloud,
+  normalizeExtractAnchors,
+  type CloudAgentFactory,
+  type CloudExtractAnchors,
+} from "./cloudExtract.js";
 import { extractStoryFromHtml } from "./extractor.js";
 import type { Story } from "./types.js";
 import { extractXArticleFromUrl } from "./xArticle.js";
+
+export interface ExtractStoryFromUrlOptions extends CloudExtractAnchors {
+  apiKey?: string;
+  createAgent?: CloudAgentFactory;
+  libraryDir?: string;
+  timeoutMs?: number;
+}
 
 export const PROFILE_DIR = ".playwright-profile";
 const LOGGED_IN_TEXT = "My Account";
@@ -27,7 +40,10 @@ export async function openLoginBrowser(): Promise<void> {
   console.log(`Login session saved in ${profileDir}.`);
 }
 
-export async function extractStoryFromUrl(url: string): Promise<Story> {
+export async function extractStoryFromUrl(
+  url: string,
+  options: ExtractStoryFromUrlOptions = {},
+): Promise<Story> {
   const validation = await validateArticleUrl(url);
   if (!validation.ok) {
     throw new Error(validation.error);
@@ -37,6 +53,29 @@ export async function extractStoryFromUrl(url: string): Promise<Story> {
   }
   if (validation.sourceType === "x") {
     return extractXArticleFromUrl(validation.url);
+  }
+  if (validation.sourceType === "cloud-extract") {
+    const parsed = await extractStoryViaCloud(
+      {
+        url: validation.url,
+        ...(normalizeExtractAnchors(options) ? { anchors: normalizeExtractAnchors(options) } : {}),
+      },
+      {
+        ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+        ...(options.createAgent ? { createAgent: options.createAgent } : {}),
+        ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
+      },
+    );
+    if (options.libraryDir) {
+      const { recordCloudHostExtract } = await import("./cloudHosts.js");
+      await recordCloudHostExtract({
+        libraryDir: options.libraryDir,
+        sourceUrl: validation.url,
+        ...(normalizeExtractAnchors(options) ? { anchors: normalizeExtractAnchors(options) } : {}),
+        ...(parsed.selectors ? { selectors: parsed.selectors } : {}),
+      });
+    }
+    return parsed.story;
   }
 
   const context = await chromium.launchPersistentContext(profileDirFromEnv(), {

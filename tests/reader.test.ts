@@ -237,7 +237,10 @@ describe("reader page", () => {
     expect(html).toContain("/queue/convert/");
     expect(html).toContain("/queue/convert-url");
     expect(html).toContain("/queue/convert-text");
-    expect(html).toContain("Paste an article URL (Pirate Wires, Substack, or X).");
+    expect(html).toContain("Paste an article URL (Pirate Wires, Substack, X, or any https article).");
+    expect(html).toContain("Optional first sentence");
+    expect(html).toContain("Optional last sentence");
+    expect(html).toContain("CURSOR_API_KEY");
     expect(html).toContain("Custom text title");
     expect(html).toContain("Paste text to convert");
     expect(html).toContain("queueText");
@@ -299,6 +302,8 @@ describe("reader page", () => {
     expect(html).toContain("/health");
     expect(html).toContain("/library.json");
     expect(html).toContain("/queue.json");
+    expect(html).toContain("/admin/propose-adapter");
+    expect(html).toContain("Propose adapter PR");
     expect(html).toContain('<a class="navlink active" href="/admin" aria-current="page">Admin</a>');
     expect(html).not.toContain("Culture");
   });

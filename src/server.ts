@@ -8,6 +8,7 @@ import { buildBacklogItems, queueBacklogConversion, queueBacklogUrlConversion } 
 import { filterVoiceExcludedLibraryManifest } from "./articleFilters.js";
 import { fetchArticleFeeds, detectNewArticles } from "./feed.js";
 import { extractStoryFromUrl } from "./browser.js";
+import { queueHostAdapterProposal } from "./cloudExtract.js";
 import { OidcAuthenticator, ForbiddenIdentityError, originAllowed, sendAuthenticationRequired, type AuthenticatedRequest, type Authenticator } from "./auth.js";
 import { validateIdentityConfig, type PirateRadioConfig } from "./config.js";
 import { PirateRadioDatabase, type PirateRadioStore } from "./database.js";
@@ -171,12 +172,18 @@ export class PirateRadioService {
       await this.database.updateSubmission(effectiveSubmissionId, "processing");
     }
     try {
+      const article = findArticleBySlug(state, slug);
       const result = await handleArticleDecision({
         decision,
         slug,
         state,
         libraryDir: this.options.config.libraryDir,
-        readArticle: (url) => extractStoryFromUrl(url),
+        readArticle: (articleUrl) =>
+          extractStoryFromUrl(articleUrl, {
+            ...article?.extractAnchors,
+            apiKey: this.options.config.cursorApiKey,
+            libraryDir: this.options.config.libraryDir,
+          }),
         synthesize: providerSynthesizer(provider),
         enableAlignment: this.options.config.enableAlignment,
       });
@@ -341,6 +348,20 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       html(response, renderAdminHtml(principal.user, options.config.identitySettingsUrl));
       return;
     }
+    if (request.method === "POST" && url.pathname === "/admin/propose-adapter") {
+      const body = await readJsonBody(request);
+      const result = await queueHostAdapterProposal({
+        hostOrUrl: String(body.host ?? body.url ?? ""),
+        libraryDir: options.config.libraryDir,
+        apiKey: options.config.cursorApiKey,
+      });
+      if (!result.ok) {
+        json(response, 400, result);
+        return;
+      }
+      json(response, 200, result);
+      return;
+    }
     if (request.method === "GET" && (url.pathname === "/queue.json" || url.pathname === "/backlog.json")) {
       const articles = await fetchArticleFeeds(options.config.feeds);
       const manifest = await readLibraryManifest(options.config.libraryDir);
@@ -403,6 +424,9 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
         const state = await getState();
         const result = await queueBacklogUrlConversion({
           url: submittedUrl,
+          firstSentence: String(body.firstSentence ?? ""),
+          lastSentence: String(body.lastSentence ?? ""),
+          cursorApiKey: options.config.cursorApiKey,
           manifest,
           state,
           statePath: options.config.statePath,
