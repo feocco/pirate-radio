@@ -25,6 +25,7 @@ export interface PirateRadioConfig {
   memberGroup: string;
   adminGroup: string;
   sessionLifetimeHours: number;
+  cursorApiKey?: string;
 }
 
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): PirateRadioConfig {
@@ -60,6 +61,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): PirateRadio
     memberGroup: env.PIRATE_RADIO_MEMBER_GROUP ?? "pirate-radio-users",
     adminGroup: env.PIRATE_RADIO_ADMIN_GROUP ?? "pirate-radio-admins",
     sessionLifetimeHours: Number(env.PIRATE_RADIO_SESSION_HOURS ?? 24),
+    cursorApiKey: env.CURSOR_API_KEY?.trim() || undefined,
   };
 }
 
