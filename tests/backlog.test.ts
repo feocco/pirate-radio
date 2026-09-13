@@ -239,7 +239,7 @@ describe("backlog", () => {
     await expect(validateArticleUrl("https://example.com/p/test-story")).resolves.toEqual({
       ok: true,
       url: "https://example.com/p/test-story",
-      slug: "test-story",
+      slug: "example-com-test-story",
       sourceType: "cloud-extract",
       sourceName: "example.com",
     });
@@ -248,7 +248,7 @@ describe("backlog", () => {
     ).resolves.toEqual({
       ok: true,
       url: "https://darioamodei.com/post/we-must-pace-the-frontier",
-      slug: "we-must-pace-the-frontier",
+      slug: "darioamodei-com-we-must-pace-the-frontier",
       sourceType: "cloud-extract",
       sourceName: "darioamodei.com",
     });
@@ -382,9 +382,9 @@ describe("backlog", () => {
     expect(result).toEqual({
       ok: true,
       status: "queued",
-      slug: "we-must-pace-the-frontier",
+      slug: "darioamodei-com-we-must-pace-the-frontier",
     });
-    expect(state.pending["we-must-pace-the-frontier"]).toMatchObject({
+    expect(state.pending["darioamodei-com-we-must-pace-the-frontier"]).toMatchObject({
       url: "https://darioamodei.com/post/we-must-pace-the-frontier",
       sourceType: "cloud-extract",
       sourceName: "darioamodei.com",
@@ -394,6 +394,35 @@ describe("backlog", () => {
         lastSentence: "That is the work.",
       },
     });
-    expect(startConversion).toHaveBeenCalledWith("we-must-pace-the-frontier");
+    expect(startConversion).toHaveBeenCalledWith("darioamodei-com-we-must-pace-the-frontier");
+  });
+
+  test("queueing an unsupported URL does not collide with a known-host slug", async () => {
+    const result = await queueBacklogUrlConversion({
+      url: "https://example.com/p/test-story",
+      cursorApiKey: "crsr_test",
+      manifest: {
+        ...manifest,
+        items: [
+          {
+            ...manifest.items[0],
+            slug: "test-story",
+            sourceUrl: "https://www.piratewires.com/p/test-story",
+            canonicalUrl: "https://www.piratewires.com/p/test-story",
+          },
+        ],
+      },
+      state: createInitialState(),
+      statePath: "/tmp/state.json",
+      processingSlugs: new Set(),
+      writeState: vi.fn(async () => {}),
+      startConversion: vi.fn(async () => {}),
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      status: "queued",
+      slug: "example-com-test-story",
+    });
   });
 });

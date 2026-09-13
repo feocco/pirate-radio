@@ -84,9 +84,10 @@ The queue page also accepts pasted Pirate Wires, Hyperdimensional, and Substack
 `https` article URLs. `POST /queue/convert-url` validates known article URL
 patterns, records a minimal pending article, and starts the same background
 conversion workflow. Unknown hosts use `sourceType: "cloud-extract"` and keep
-the original URL as `sourceUrl` and `canonicalUrl`. Optional first and last
-sentence fields are stored on the pending article and passed to the extract
-agent.
+the original URL as `sourceUrl` and `canonicalUrl`. Cloud-extract slugs include
+the host so they do not collide with Pirate Wires, Substack, or each other.
+The agent wait times out after 10 minutes. Optional first and last sentence
+fields are stored on the pending article and passed to the extract agent.
 X extraction uses `GET /2/tweets/<id>?tweet.fields=article,author_id` with an
 app-only bearer token; the expanded X account display name becomes the author,
 with the handle as a fallback. It does not depend on X page markup or a browser
