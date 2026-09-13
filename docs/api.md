@@ -51,4 +51,9 @@ this endpoint directly.
 `POST /queue/convert-url` accepts Pirate Wires and Substack `/p/...` URLs plus
 X `/<username>/status/<id>` URLs that contain an X Article. Ordinary X posts are
 rejected during extraction because they do not contain the structured Article
-payload.
+payload. Other `https` article URLs are accepted as `cloud-extract` when
+`CURSOR_API_KEY` is set. Optional `firstSentence` and `lastSentence` fields pin
+the extract to inclusive sentence anchors. The queue stays in `processing` while
+the no-repo Cloud Agent runs, then the existing TTS and ready-notification path
+continues. The service fails closed with a clear error or failure notification
+if the key is missing or the agent fails.

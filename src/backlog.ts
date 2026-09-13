@@ -1,4 +1,10 @@
 import { filterVoiceExcludedArticles } from "./articleFilters.js";
+import {
+  classifyUnsupportedHttpsArticleUrl,
+  cursorApiKeyFromEnv,
+  MISSING_CURSOR_API_KEY_MESSAGE,
+  normalizeExtractAnchors,
+} from "./cloudExtract.js";
 import { slugFromUrl } from "./slug.js";
 import type { ArticleSourceType, PirateArticle } from "./feed.js";
 import type { LibraryManifest } from "./library.js";
@@ -42,6 +48,9 @@ export type QueueBacklogConversionResult =
 
 export interface QueueBacklogUrlConversionInput {
   url: string;
+  firstSentence?: string;
+  lastSentence?: string;
+  cursorApiKey?: string;
   manifest: LibraryManifest;
   state: PirateRadioState;
   statePath: string;
@@ -123,6 +132,13 @@ export async function queueBacklogUrlConversion(
   if (!validation.ok) {
     return { ok: false, status: "invalid_url", error: validation.error };
   }
+  if (
+    validation.sourceType === "cloud-extract" &&
+    !(input.cursorApiKey ?? cursorApiKeyFromEnv())
+  ) {
+    return { ok: false, status: "invalid_url", error: MISSING_CURSOR_API_KEY_MESSAGE };
+  }
+  const extractAnchors = normalizeExtractAnchors(input);
 
   const article: PirateArticle = {
     id: validation.url,
@@ -135,6 +151,7 @@ export async function queueBacklogUrlConversion(
     sourceType: validation.sourceType,
     sourceName: validation.sourceName,
     canonicalUrl: validation.url,
+    ...(extractAnchors ? { extractAnchors } : {}),
   };
   if (isConverted(article, input.manifest)) {
     return { ok: true, status: "converted", slug: validation.slug };
@@ -194,6 +211,11 @@ export async function validateArticleUrl(
     };
   }
 
+  const source = sourceForUrl(url);
+  if (!source) {
+    return classifyUnsupportedHttpsArticleUrl(url.toString());
+  }
+
   const parts = url.pathname.split("/").filter(Boolean);
   if (parts[0] !== "p" || !parts[1]) {
     return {
@@ -205,10 +227,6 @@ export async function validateArticleUrl(
   url.hash = "";
   url.search = "";
   const slug = slugFromUrl(url.toString());
-  const source = sourceForUrl(url);
-  if (!source) {
-    return { ok: false, error: "Enter a supported article URL from Pirate Wires, Substack, or X." };
-  }
   const canonicalUrl = canonicalArticleUrl(url, source.sourceType);
   return { ok: true, url: canonicalUrl, slug, ...source };
 }

@@ -3,7 +3,8 @@
 OIDC-protected homelab reader and local CLI for collecting articles from across
 the web, queueing pasted text, generating xAI text-to-speech audio, and
 reading generated audio with cached article art where available. Supported
-article sources include Pirate Wires, Substack publications, and X Articles.
+article sources include Pirate Wires, Substack publications, X Articles, and
+unsupported `https` article URLs extracted by a no-repo Cursor Cloud Agent.
 
 ## Setup
 
@@ -41,6 +42,9 @@ optional author, tagline, body blocks, best-effort section titles, and the
 article hero image URL.
 X Articles use the official X Post lookup API and require
 `X_API_BEARER_TOKEN`; the public X page is not scraped.
+Unsupported `https` article URLs require `CURSOR_API_KEY` and launch a no-repo
+Cursor Cloud Agent that writes `artifacts/story.json`. Optional
+`--first-sentence` and `--last-sentence` pin the extract to inclusive anchors.
 
 ## Generate Audio
 
