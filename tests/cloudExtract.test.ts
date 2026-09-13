@@ -17,6 +17,7 @@ import {
   pickStoryArtifactPath,
   type CloudAgentFactory,
 } from "../src/cloudExtract.js";
+import { appendLibraryItem, readLibraryManifest } from "../src/library.js";
 import { createInitialState, handleArticleDecision } from "../src/workflow.js";
 
 let tempDir: string | undefined;
@@ -222,6 +223,7 @@ describe("cloud extract contract", () => {
 
     expect(result.status).toBe("accepted");
     expect(result.libraryItem).toMatchObject({
+      slug,
       sourceType: "cloud-extract",
       sourceName: "darioamodei.com",
       sourceUrl,
@@ -229,6 +231,75 @@ describe("cloud extract contract", () => {
       title: "We Must Pace the Frontier",
       author: "Dario Amodei",
     });
+    expect(result.libraryItem?.audioUrl).toBe(`/audio/${slug}.mp3`);
+  });
+
+  test("keeps a namespaced cloud-extract slug so it does not overwrite a last-segment library item", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-cloud-extract-"));
+    const existingAudio = join(tempDir, "audio", "we-must-pace-the-frontier.mp3");
+    await mkdir(dirname(existingAudio), { recursive: true });
+    await writeFile(existingAudio, Buffer.from("existing mp3"));
+    await appendLibraryItem(tempDir, {
+      slug: "we-must-pace-the-frontier",
+      title: "Pirate Wires original",
+      sourceUrl: "https://www.piratewires.com/p/we-must-pace-the-frontier",
+      sourceType: "pirate-wires",
+      sourceName: "Pirate Wires",
+      canonicalUrl: "https://www.piratewires.com/p/we-must-pace-the-frontier",
+      publishedAt: "Mon, 22 Jun 2026 17:07:10 GMT",
+      generatedAt: "2026-06-23T01:00:00.000Z",
+      audioPath: existingAudio,
+      jsonPath: join(tempDir, "stories", "we-must-pace-the-frontier.json"),
+      textPath: join(tempDir, "text", "we-must-pace-the-frontier.txt"),
+      estimatedCostUsd: 0.01,
+      wordCount: 2,
+      characterCount: 10,
+    });
+
+    const sourceUrl = "https://darioamodei.com/post/we-must-pace-the-frontier";
+    const slug = cloudExtractSlug(sourceUrl);
+    const state = createInitialState();
+    state.pending[slug] = {
+      id: sourceUrl,
+      title: "We Must Pace The Frontier",
+      url: sourceUrl,
+      author: "",
+      publishedAt: "",
+      description: "Queued from pasted darioamodei.com URL.",
+      slug,
+      sourceType: "cloud-extract",
+      sourceName: "darioamodei.com",
+      canonicalUrl: sourceUrl,
+    };
+
+    await handleArticleDecision({
+      decision: "accept",
+      slug,
+      state,
+      libraryDir: tempDir,
+      readArticle: async () => ({
+        sourceUrl,
+        title: "We Must Pace the Frontier",
+        text: "I think we should pace.",
+        wordCount: 5,
+        characterCount: 23,
+        extractedAt: "2026-09-13T12:00:00.000Z",
+      }),
+      synthesize: async ({ outputPath }) => {
+        await mkdir(dirname(outputPath), { recursive: true });
+        await writeFile(outputPath, Buffer.from("cloud mp3"));
+        return { provider: "mock", outputPath, estimatedCostUsd: 0.01 };
+      },
+    });
+
+    const manifest = await readLibraryManifest(tempDir);
+    expect(manifest.items.map((item) => item.slug).sort()).toEqual([
+      "darioamodei-com-we-must-pace-the-frontier",
+      "we-must-pace-the-frontier",
+    ]);
+    expect(manifest.items.find((item) => item.slug === "we-must-pace-the-frontier")?.title).toBe(
+      "Pirate Wires original",
+    );
   });
 
   test("fails closed when the cloud agent run errors", async () => {
@@ -266,13 +337,14 @@ describe("cloud extract contract", () => {
   });
 
   test("fails closed when the cloud agent wait exceeds the timeout", async () => {
+    const close = vi.fn();
     const createAgent: CloudAgentFactory = async () => ({
       send: async () => ({
         wait: () => new Promise(() => {}),
       }),
       listArtifacts: async () => [],
       downloadArtifact: async () => new Uint8Array(),
-      close: vi.fn(),
+      close,
     });
 
     await expect(
@@ -281,5 +353,33 @@ describe("cloud extract contract", () => {
         { apiKey: "crsr_test", createAgent, timeoutMs: 20 },
       ),
     ).rejects.toThrow(CLOUD_EXTRACT_TIMEOUT_MESSAGE);
+    expect(close).toHaveBeenCalled();
+  });
+
+  test("fails closed when agent create or send hangs before wait", async () => {
+    await expect(
+      extractStoryViaCloud(
+        { url: "https://darioamodei.com/post/we-must-pace-the-frontier" },
+        { apiKey: "crsr_test", createAgent: () => new Promise(() => {}), timeoutMs: 20 },
+      ),
+    ).rejects.toThrow(CLOUD_EXTRACT_TIMEOUT_MESSAGE);
+
+    const close = vi.fn();
+    await expect(
+      extractStoryViaCloud(
+        { url: "https://darioamodei.com/post/we-must-pace-the-frontier" },
+        {
+          apiKey: "crsr_test",
+          timeoutMs: 20,
+          createAgent: async () => ({
+            send: () => new Promise(() => {}),
+            listArtifacts: async () => [],
+            downloadArtifact: async () => new Uint8Array(),
+            close,
+          }),
+        },
+      ),
+    ).rejects.toThrow(CLOUD_EXTRACT_TIMEOUT_MESSAGE);
+    expect(close).toHaveBeenCalled();
   });
 });

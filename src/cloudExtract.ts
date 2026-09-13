@@ -108,16 +108,20 @@ export function decodeArtifactBytes(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("utf8");
 }
 
-export async function waitForCloudAgent(
-  wait: () => Promise<CloudAgentRunResult>,
+export async function withCloudAgentTimeout<T>(
+  work: () => Promise<T>,
   options: { timeoutMs?: number; timeoutMessage?: string } = {},
-): Promise<CloudAgentRunResult> {
+): Promise<T> {
   const timeoutMs = options.timeoutMs ?? CLOUD_AGENT_TIMEOUT_MS;
   const timeoutMessage = options.timeoutMessage ?? CLOUD_EXTRACT_TIMEOUT_MESSAGE;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const pending = work();
+  pending.catch(() => {
+    // Keep a late reject from an abandoned create/send/wait from becoming unhandled.
+  });
   try {
     return await Promise.race([
-      wait(),
+      pending,
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
       }),
@@ -127,6 +131,13 @@ export async function waitForCloudAgent(
       clearTimeout(timer);
     }
   }
+}
+
+export async function waitForCloudAgent(
+  wait: () => Promise<CloudAgentRunResult>,
+  options: { timeoutMs?: number; timeoutMessage?: string } = {},
+): Promise<CloudAgentRunResult> {
+  return withCloudAgentTimeout(wait, options);
 }
 
 export function classifyUnsupportedHttpsArticleUrl(value: string): UnsupportedArticleUrlClassification {
@@ -253,39 +264,39 @@ export async function extractStoryViaCloud(
   }
 
   const createAgent = options.createAgent ?? createCursorSdkAgent;
-  const agent = await createAgent({
-    apiKey,
-    cloud: { repos: [] },
-  });
-
+  let agent: CloudAgentHandle | undefined;
   try {
-    const run = await agent.send(buildCloudExtractPrompt(request));
-    const result = await waitForCloudAgent(() => run.wait(), {
-      timeoutMs: options.timeoutMs,
-    });
-    if (result.status !== "finished") {
-      throw new Error(result.error?.message || CLOUD_EXTRACT_FAILURE_MESSAGE);
-    }
+    return await withCloudAgentTimeout(async () => {
+      agent = await createAgent({
+        apiKey,
+        cloud: { repos: [] },
+      });
+      const run = await agent.send(buildCloudExtractPrompt(request));
+      const result = await run.wait();
+      if (result.status !== "finished") {
+        throw new Error(result.error?.message || CLOUD_EXTRACT_FAILURE_MESSAGE);
+      }
 
-    const artifactPath = pickStoryArtifactPath(await agent.listArtifacts());
-    if (!artifactPath) {
-      throw new Error("Cloud extract finished without a Story JSON artifact.");
-    }
+      const artifactPath = pickStoryArtifactPath(await agent.listArtifacts());
+      if (!artifactPath) {
+        throw new Error("Cloud extract finished without a Story JSON artifact.");
+      }
 
-    let raw: unknown;
-    try {
-      raw = JSON.parse(decodeArtifactBytes(await agent.downloadArtifact(artifactPath)));
-    } catch (error) {
-      throw new Error(
-        error instanceof Error && error.message.includes("JSON")
-          ? error.message
-          : "Cloud extract artifact is not valid JSON.",
-      );
-    }
+      let raw: unknown;
+      try {
+        raw = JSON.parse(decodeArtifactBytes(await agent.downloadArtifact(artifactPath)));
+      } catch (error) {
+        throw new Error(
+          error instanceof Error && error.message.includes("JSON")
+            ? error.message
+            : "Cloud extract artifact is not valid JSON.",
+        );
+      }
 
-    return parseCloudExtractArtifact(raw, request.url, request.anchors, options.now);
+      return parseCloudExtractArtifact(raw, request.url, request.anchors, options.now);
+    }, { timeoutMs: options.timeoutMs });
   } finally {
-    agent.close();
+    agent?.close();
   }
 }
 
@@ -393,43 +404,45 @@ export async function proposeHostAdapter(input: {
   const store = await readCloudHostStore(input.libraryDir);
   const existing = store.hosts[host];
   const createAgent = input.createAgent ?? createCursorSdkAgent;
-  const agent = await createAgent({
-    apiKey,
-    cloud: {
-      repos: [{ url: input.repoUrl ?? PIRATE_RADIO_REPO_URL, startingRef: "main" }],
-      autoCreatePR: true,
-    },
-  });
-
+  let agent: CloudAgentHandle | undefined;
   try {
-    const run = await agent.send(
-      buildHostAdapterPrompt({
+    return await withCloudAgentTimeout(async () => {
+      agent = await createAgent({
+        apiKey,
+        cloud: {
+          repos: [{ url: input.repoUrl ?? PIRATE_RADIO_REPO_URL, startingRef: "main" }],
+          autoCreatePR: true,
+        },
+      });
+      const run = await agent.send(
+        buildHostAdapterPrompt({
+          host,
+          sourceUrl: existing?.lastSourceUrl,
+          fingerprint: existing?.fingerprint,
+        }),
+      );
+      const result = await run.wait();
+      if (result.status !== "finished") {
+        throw new Error(result.error?.message || "Host adapter agent failed.");
+      }
+      const prUrl = result.git?.branches?.find((branch) => branch.prUrl)?.prUrl;
+      const record = await markCloudHostAdapterRequested({
+        libraryDir: input.libraryDir,
         host,
-        sourceUrl: existing?.lastSourceUrl,
-        fingerprint: existing?.fingerprint,
-      }),
-    );
-    const result = await waitForCloudAgent(() => run.wait(), {
+        agentId: agent.agentId,
+        ...(prUrl ? { prUrl } : {}),
+      });
+      return {
+        host: record.host,
+        ...(record.adapterAgentId ? { agentId: record.adapterAgentId } : {}),
+        ...(record.adapterPrUrl ? { prUrl: record.adapterPrUrl } : {}),
+      };
+    }, {
       timeoutMs: input.timeoutMs,
       timeoutMessage: HOST_ADAPTER_TIMEOUT_MESSAGE,
     });
-    if (result.status !== "finished") {
-      throw new Error(result.error?.message || "Host adapter agent failed.");
-    }
-    const prUrl = result.git?.branches?.find((branch) => branch.prUrl)?.prUrl;
-    const record = await markCloudHostAdapterRequested({
-      libraryDir: input.libraryDir,
-      host,
-      agentId: agent.agentId,
-      ...(prUrl ? { prUrl } : {}),
-    });
-    return {
-      host: record.host,
-      ...(record.adapterAgentId ? { agentId: record.adapterAgentId } : {}),
-      ...(record.adapterPrUrl ? { prUrl: record.adapterPrUrl } : {}),
-    };
   } finally {
-    agent.close();
+    agent?.close();
   }
 }
 

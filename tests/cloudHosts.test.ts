@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { extractStoryFromUrl } from "../src/browser.js";
 import {
   buildHostAdapterPrompt,
+  HOST_ADAPTER_TIMEOUT_MESSAGE,
   PIRATE_RADIO_REPO_URL,
   proposeHostAdapter,
   queueHostAdapterProposal,
@@ -198,6 +199,19 @@ describe("cloud host adapter factory", () => {
     expect(prompt).toContain("Do not add Mozilla Readability");
     expect(prompt).toContain("article");
     expect(prompt).toContain("Hello.");
+  });
+
+  test("fails closed when the adapter agent create hangs", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-cloud-hosts-"));
+    await expect(
+      proposeHostAdapter({
+        hostOrUrl: "slow.example",
+        libraryDir: tempDir,
+        apiKey: "crsr_test",
+        timeoutMs: 20,
+        createAgent: () => new Promise(() => {}),
+      }),
+    ).rejects.toThrow(HOST_ADAPTER_TIMEOUT_MESSAGE);
   });
 
   test("can mark an adapter request without a prior extract", async () => {
