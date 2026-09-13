@@ -70,6 +70,7 @@ const sharedCss = `
   .pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 22px 0 64px; }
   .url-queue { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin: 24px auto 0; padding-bottom: 20px; border-bottom: 2px solid var(--line); }
   .url-queue .search { width: 100%; min-width: 0; }
+  .url-queue .anchors { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .text-queue { display: grid; grid-template-columns: minmax(180px, 280px) 1fr auto; gap: 10px; margin: 14px auto 0; padding-bottom: 20px; border-bottom: 2px solid var(--line); }
   .text-queue .search { width: 100%; min-width: 0; }
   .textarea { min-height: 180px; resize: vertical; padding: 11px 12px; border: 2px solid var(--line); background: #fff; font: inherit; font-weight: 700; }
@@ -298,11 +299,15 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
   <section class="hero wrap">
     <div class="kicker">Audio queue</div>
     <h1>Queue</h1>
-    <p class="deck">Recent monitored articles, pasted URLs, and custom text that can be queued for audio generation.</p>
+    <p class="deck">Recent monitored articles, pasted URLs, and custom text that can be queued for audio generation. Unsupported https article URLs use a Cursor cloud extract when CURSOR_API_KEY is set.</p>
   </section>
   <form id="url-queue" class="url-queue wrap">
-    <input id="article-url" class="search" type="url" placeholder="Paste an article URL (Pirate Wires, Substack, or X)." aria-label="Paste article URL">
+    <input id="article-url" class="search" type="url" placeholder="Paste an article URL (Pirate Wires, Substack, X, or any https article)." aria-label="Paste article URL">
     <button id="queue-url" class="button" type="submit">Convert URL</button>
+    <div class="anchors">
+      <input id="first-sentence" class="search" type="text" placeholder="Optional first sentence" aria-label="Optional first sentence">
+      <input id="last-sentence" class="search" type="text" placeholder="Optional last sentence" aria-label="Optional last sentence">
+    </div>
     <div id="url-status" class="status" role="status"></div>
   </form>
   <form id="text-queue" class="text-queue wrap">
@@ -338,6 +343,8 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
     const pageLabel = document.getElementById("page");
     const urlForm = document.getElementById("url-queue");
     const articleUrl = document.getElementById("article-url");
+    const firstSentence = document.getElementById("first-sentence");
+    const lastSentence = document.getElementById("last-sentence");
     const queueUrlButton = document.getElementById("queue-url");
     const urlStatus = document.getElementById("url-status");
     const textForm = document.getElementById("text-queue");
@@ -473,7 +480,11 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
         const response = await fetch("/queue/convert-url", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ url: articleUrl.value }),
+          body: JSON.stringify({
+            url: articleUrl.value,
+            firstSentence: firstSentence.value,
+            lastSentence: lastSentence.value,
+          }),
         });
         const payload = await response.json();
         if (!response.ok || !payload.ok) {
@@ -487,6 +498,8 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
           urlStatus.textContent = "Queued. You will get a notification when audio is ready.";
         }
         articleUrl.value = "";
+        firstSentence.value = "";
+        lastSentence.value = "";
       } catch (error) {
         urlStatus.className = "status error";
         urlStatus.textContent = error.message;

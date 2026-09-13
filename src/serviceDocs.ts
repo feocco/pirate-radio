@@ -432,7 +432,7 @@ const pirateRadioOpenApi = {
     "/queue/convert-url": {
       post: {
         tags: ["queue"],
-        summary: "Queue conversion for a pasted Pirate Wires, Substack, or X Article URL",
+        summary: "Queue conversion for a pasted article URL",
         requestBody: {
           required: true,
           content: {
@@ -441,6 +441,8 @@ const pirateRadioOpenApi = {
                 type: "object",
                 properties: {
                   url: { type: "string", format: "uri" },
+                  firstSentence: { type: "string" },
+                  lastSentence: { type: "string" },
                 },
                 required: ["url"],
               },
@@ -465,7 +467,7 @@ const pirateRadioOpenApi = {
             },
           },
           "400": {
-            description: "The pasted URL is invalid or not a supported article URL.",
+            description: "The pasted URL is invalid, or CURSOR_API_KEY is missing for an unsupported host.",
             content: {
               "application/json": {
                 schema: {

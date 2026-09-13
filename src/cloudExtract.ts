@@ -195,6 +195,62 @@ export function parseCloudExtractArtifact(
   };
 }
 
+export async function extractStoryViaCloud(
+  request: CloudExtractRequest,
+  options: {
+    apiKey?: string;
+    createAgent?: CloudAgentFactory;
+    now?: () => Date;
+  } = {},
+): Promise<ParsedCloudExtract> {
+  const apiKey = options.apiKey ?? cursorApiKeyFromEnv();
+  if (!apiKey) {
+    throw new Error(MISSING_CURSOR_API_KEY_MESSAGE);
+  }
+
+  const createAgent = options.createAgent ?? createCursorSdkAgent;
+  const agent = await createAgent({
+    apiKey,
+    cloud: { repos: [] },
+  });
+
+  try {
+    const run = await agent.send(buildCloudExtractPrompt(request));
+    const result = await run.wait();
+    if (result.status !== "finished") {
+      throw new Error(result.error?.message || CLOUD_EXTRACT_FAILURE_MESSAGE);
+    }
+
+    const artifactPath = pickStoryArtifactPath(await agent.listArtifacts());
+    if (!artifactPath) {
+      throw new Error("Cloud extract finished without a Story JSON artifact.");
+    }
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse((await agent.downloadArtifact(artifactPath)).toString("utf8"));
+    } catch (error) {
+      throw new Error(
+        error instanceof Error && error.message.includes("JSON")
+          ? error.message
+          : "Cloud extract artifact is not valid JSON.",
+      );
+    }
+
+    return parseCloudExtractArtifact(raw, request.url, request.anchors, options.now);
+  } finally {
+    agent.close();
+  }
+}
+
+export async function createCursorSdkAgent(input: CloudAgentCreateInput): Promise<CloudAgentHandle> {
+  const { Agent } = await import("@cursor/sdk");
+  return Agent.create({
+    apiKey: input.apiKey,
+    cloud: input.cloud,
+  });
+}
+
 export function pickStoryArtifactPath(artifacts: Array<{ path: string }>): string | undefined {
   const jsonArtifacts = artifacts.filter((artifact) => artifact.path.toLowerCase().endsWith(".json"));
   return (

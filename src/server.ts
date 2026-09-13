@@ -171,12 +171,17 @@ export class PirateRadioService {
       await this.database.updateSubmission(effectiveSubmissionId, "processing");
     }
     try {
+      const article = findArticleBySlug(state, slug);
       const result = await handleArticleDecision({
         decision,
         slug,
         state,
         libraryDir: this.options.config.libraryDir,
-        readArticle: (url) => extractStoryFromUrl(url),
+        readArticle: (articleUrl) =>
+          extractStoryFromUrl(articleUrl, {
+            ...article?.extractAnchors,
+            apiKey: this.options.config.cursorApiKey,
+          }),
         synthesize: providerSynthesizer(provider),
         enableAlignment: this.options.config.enableAlignment,
       });
@@ -403,6 +408,9 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
         const state = await getState();
         const result = await queueBacklogUrlConversion({
           url: submittedUrl,
+          firstSentence: String(body.firstSentence ?? ""),
+          lastSentence: String(body.lastSentence ?? ""),
+          cursorApiKey: options.config.cursorApiKey,
           manifest,
           state,
           statePath: options.config.statePath,

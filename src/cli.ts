@@ -28,10 +28,12 @@ program
 
 program
   .command("extract")
-  .argument("<url>", "Pirate Wires story URL")
+  .argument("<url>", "Article URL")
+  .option("--first-sentence <text>", "Inclusive first sentence for unsupported hosts")
+  .option("--last-sentence <text>", "Inclusive last sentence for unsupported hosts")
   .description("Extract story text, reader metadata, and write txt/json outputs.")
-  .action(async (url: string) => {
-    const story = await extractStoryFromUrl(url);
+  .action(async (url: string, options: { firstSentence?: string; lastSentence?: string }) => {
+    const story = await extractStoryFromUrl(url, options);
     const written = await writeStoryOutputs(story);
     console.log(`Text: ${written.textPath}`);
     console.log(`JSON: ${written.jsonPath}`);
@@ -61,12 +63,14 @@ program
 
 program
   .command("read")
-  .argument("<url>", "Pirate Wires story URL")
+  .argument("<url>", "Article URL")
   .option("--provider <provider>", "TTS provider", DEFAULT_TTS_PROVIDER)
   .option("--allow-over-budget", "Allow audio generation over the $1 estimate", false)
+  .option("--first-sentence <text>", "Inclusive first sentence for unsupported hosts")
+  .option("--last-sentence <text>", "Inclusive last sentence for unsupported hosts")
   .description("Extract a story and generate audio in one command.")
-  .action(async (url: string, options: { provider: string; allowOverBudget: boolean }) => {
-    const story = await extractStoryFromUrl(url);
+  .action(async (url: string, options: { provider: string; allowOverBudget: boolean; firstSentence?: string; lastSentence?: string }) => {
+    const story = await extractStoryFromUrl(url, options);
     const written = await writeStoryOutputs(story);
     const audioPath = await storyAudioPath(story);
     const provider = createTtsProvider(options.provider);

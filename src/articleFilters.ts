@@ -47,6 +47,9 @@ function sourceNameFromUrl(sourceUrl: string): string | undefined {
     if (url.protocol === "custom-text:") {
       return "Custom Text";
     }
+    if (url.protocol === "https:" || url.protocol === "http:") {
+      return url.hostname.replace(/^www\./i, "");
+    }
   } catch {
     return undefined;
   }
