@@ -84,6 +84,16 @@ Durable gotchas and clarifications:
 - There is no lint script. Static checking is `npm run build` (`tsc`). Full
   verification set is under `## Verification` (`npm test`, `npm run build`,
   `docker build`).
+- `docker build` does not currently work in a cloud agent. There is a daemon on
+  `tcp://localhost:2375` but no client binary, and installing a static `docker`
+  CLI is not enough: `mcr.microsoft.com` is allowlisted while the blob CDN it
+  redirects to (`*.data.mcr.microsoft.com`) is not, so pulling the
+  `mcr.microsoft.com/playwright` base fails with `error pulling image
+  configuration: download failed after attempts=6: EOF`. Add
+  `*.data.mcr.microsoft.com` to the Network Access allowlist (applies on the
+  next freshly-booted agent) to enable it. Until then `npm test` +
+  `npm run build` are the checks a cloud agent can actually complete, which is
+  the same work the Dockerfile's build stage runs.
 - `npm test` runs offline against mocks/fixtures. The Postgres integration suite
   (`tests/database.integration.test.ts`) is skipped unless
   `PIRATE_RADIO_TEST_DATABASE_URL` points at a reachable Postgres.
