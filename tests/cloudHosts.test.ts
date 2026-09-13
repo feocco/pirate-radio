@@ -7,6 +7,7 @@ import {
   buildHostAdapterPrompt,
   PIRATE_RADIO_REPO_URL,
   proposeHostAdapter,
+  queueHostAdapterProposal,
   type CloudAgentFactory,
 } from "../src/cloudExtract.js";
 import {
@@ -128,6 +129,63 @@ describe("cloud host adapter factory", () => {
       adapterStatus: "requested",
       adapterPrUrl: "https://github.com/feocco/pirate-radio/pull/99",
     });
+  });
+
+  test("queueHostAdapterProposal returns before the agent wait finishes", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-cloud-hosts-"));
+    let finish!: (value: { status: "finished" }) => void;
+    const wait = new Promise<{ status: "finished" }>((resolve) => {
+      finish = resolve;
+    });
+    const createAgent: CloudAgentFactory = vi.fn(async () => ({
+      send: async () => ({ wait: () => wait }),
+      listArtifacts: async () => [],
+      downloadArtifact: async () => new Uint8Array(),
+      close: vi.fn(),
+    }));
+
+    const first = await queueHostAdapterProposal({
+      hostOrUrl: "https://slow.example/post/article",
+      libraryDir: tempDir,
+      apiKey: "crsr_test",
+      createAgent,
+    });
+    const second = await queueHostAdapterProposal({
+      hostOrUrl: "slow.example",
+      libraryDir: tempDir,
+      apiKey: "crsr_test",
+      createAgent,
+    });
+
+    expect(first).toEqual({ ok: true, status: "queued", host: "slow.example" });
+    expect(second).toEqual({ ok: true, status: "processing", host: "slow.example" });
+    await vi.waitFor(() => expect(createAgent).toHaveBeenCalledTimes(1));
+    finish({ status: "finished" });
+  });
+
+  test("queueHostAdapterProposal returns an already opened PR without launching", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-cloud-hosts-"));
+    await markCloudHostAdapterRequested({
+      libraryDir: tempDir,
+      host: "opened.example",
+      prUrl: "https://github.com/feocco/pirate-radio/pull/7",
+    });
+    const createAgent = vi.fn();
+
+    await expect(
+      queueHostAdapterProposal({
+        hostOrUrl: "opened.example",
+        libraryDir: tempDir,
+        apiKey: "crsr_test",
+        createAgent,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      status: "opened",
+      host: "opened.example",
+      prUrl: "https://github.com/feocco/pirate-radio/pull/7",
+    });
+    expect(createAgent).not.toHaveBeenCalled();
   });
 
   test("adapter prompt names the extractor patterns and fingerprint", () => {

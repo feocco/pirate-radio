@@ -175,18 +175,18 @@ const pirateRadioOpenApi = {
         },
         responses: {
           "200": {
-            description: "The adapter agent was launched. The pull request is not merged.",
+            description: "The adapter agent was queued, is already running, or already opened a pull request. The HTTP response does not wait on the Cloud Agent.",
             content: {
               "application/json": {
                 schema: {
                   type: "object",
                   properties: {
                     ok: { type: "boolean", const: true },
+                    status: { type: "string", enum: ["queued", "processing", "opened"] },
                     host: { type: "string" },
-                    agentId: { type: "string" },
                     prUrl: { type: "string" },
                   },
-                  required: ["ok", "host"],
+                  required: ["ok", "status", "host"],
                 },
               },
             },

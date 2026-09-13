@@ -8,7 +8,7 @@ import { buildBacklogItems, queueBacklogConversion, queueBacklogUrlConversion } 
 import { filterVoiceExcludedLibraryManifest } from "./articleFilters.js";
 import { fetchArticleFeeds, detectNewArticles } from "./feed.js";
 import { extractStoryFromUrl } from "./browser.js";
-import { proposeHostAdapter } from "./cloudExtract.js";
+import { queueHostAdapterProposal } from "./cloudExtract.js";
 import { OidcAuthenticator, ForbiddenIdentityError, originAllowed, sendAuthenticationRequired, type AuthenticatedRequest, type Authenticator } from "./auth.js";
 import { validateIdentityConfig, type PirateRadioConfig } from "./config.js";
 import { PirateRadioDatabase, type PirateRadioStore } from "./database.js";
@@ -349,20 +349,17 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       return;
     }
     if (request.method === "POST" && url.pathname === "/admin/propose-adapter") {
-      try {
-        const body = await readJsonBody(request);
-        const result = await proposeHostAdapter({
-          hostOrUrl: String(body.host ?? body.url ?? ""),
-          libraryDir: options.config.libraryDir,
-          apiKey: options.config.cursorApiKey,
-        });
-        json(response, 200, { ok: true, ...result });
-      } catch (error) {
-        json(response, 400, {
-          ok: false,
-          error: error instanceof Error ? error.message : "Could not propose an adapter.",
-        });
+      const body = await readJsonBody(request);
+      const result = await queueHostAdapterProposal({
+        hostOrUrl: String(body.host ?? body.url ?? ""),
+        libraryDir: options.config.libraryDir,
+        apiKey: options.config.cursorApiKey,
+      });
+      if (!result.ok) {
+        json(response, 400, result);
+        return;
       }
+      json(response, 200, result);
       return;
     }
     if (request.method === "GET" && (url.pathname === "/queue.json" || url.pathname === "/backlog.json")) {

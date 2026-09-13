@@ -681,7 +681,9 @@ export function renderAdminHtml(user?: ApplicationUser, identitySettingsUrl?: st
         }
         adapterStatus.textContent = payload.prUrl
           ? "Opened " + payload.prUrl + ". Review it; do not auto-merge."
-          : "Adapter agent queued. Review the pull request; do not auto-merge.";
+          : payload.status === "processing"
+            ? "Adapter agent already running for this host."
+            : "Adapter agent queued. Review the pull request; do not auto-merge.";
         adapterHost.value = "";
       } catch (error) {
         adapterStatus.className = "status error";

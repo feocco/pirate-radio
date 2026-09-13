@@ -295,6 +295,7 @@ describe("reader page", () => {
     expect(html).toContain("/queue.json");
     expect(html).toContain("/admin/propose-adapter");
     expect(html).toContain("Propose adapter PR");
+    expect(html).toContain("Adapter agent already running for this host.");
     expect(html).toContain('<a class="navlink active" href="/admin">Admin</a>');
     expect(html).not.toContain("Culture");
   });

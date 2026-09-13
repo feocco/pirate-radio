@@ -320,6 +320,61 @@ export function buildHostAdapterPrompt(input: {
   return lines.join("\n");
 }
 
+const adapterHostsInFlight = new Set<string>();
+
+export type QueueHostAdapterProposalResult =
+  | { ok: true; status: "queued" | "processing" | "opened"; host: string; prUrl?: string }
+  | { ok: false; error: string };
+
+export async function queueHostAdapterProposal(input: {
+  hostOrUrl: string;
+  libraryDir: string;
+  apiKey?: string;
+  createAgent?: CloudAgentFactory;
+  repoUrl?: string;
+  timeoutMs?: number;
+}): Promise<QueueHostAdapterProposalResult> {
+  const { normalizeCloudHost, readCloudHostStore } = await import("./cloudHosts.js");
+  let host: string;
+  try {
+    host = normalizeCloudHost(input.hostOrUrl);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Enter a host or https URL.",
+    };
+  }
+
+  const apiKey = input.apiKey ?? cursorApiKeyFromEnv();
+  if (!apiKey) {
+    return { ok: false, error: MISSING_CURSOR_API_KEY_MESSAGE };
+  }
+
+  const existing = (await readCloudHostStore(input.libraryDir)).hosts[host];
+  if (existing?.adapterPrUrl) {
+    return { ok: true, status: "opened", host, prUrl: existing.adapterPrUrl };
+  }
+  if (adapterHostsInFlight.has(host)) {
+    return { ok: true, status: "processing", host };
+  }
+
+  adapterHostsInFlight.add(host);
+  void proposeHostAdapter({
+    ...input,
+    hostOrUrl: host,
+    apiKey,
+  }).catch((error) => {
+    console.error(
+      `[pirate-radio] adapter agent failed for ${host}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }).finally(() => {
+    adapterHostsInFlight.delete(host);
+  });
+
+  return { ok: true, status: "queued", host };
+}
+
 export async function proposeHostAdapter(input: {
   hostOrUrl: string;
   libraryDir: string;
