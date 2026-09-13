@@ -8,6 +8,7 @@ import { buildBacklogItems, queueBacklogConversion, queueBacklogUrlConversion } 
 import { filterVoiceExcludedLibraryManifest } from "./articleFilters.js";
 import { fetchArticleFeeds, detectNewArticles } from "./feed.js";
 import { extractStoryFromUrl } from "./browser.js";
+import { proposeHostAdapter } from "./cloudExtract.js";
 import { OidcAuthenticator, ForbiddenIdentityError, originAllowed, sendAuthenticationRequired, type AuthenticatedRequest, type Authenticator } from "./auth.js";
 import { validateIdentityConfig, type PirateRadioConfig } from "./config.js";
 import { PirateRadioDatabase, type PirateRadioStore } from "./database.js";
@@ -181,6 +182,7 @@ export class PirateRadioService {
           extractStoryFromUrl(articleUrl, {
             ...article?.extractAnchors,
             apiKey: this.options.config.cursorApiKey,
+            libraryDir: this.options.config.libraryDir,
           }),
         synthesize: providerSynthesizer(provider),
         enableAlignment: this.options.config.enableAlignment,
@@ -344,6 +346,23 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
     }
     if (request.method === "GET" && url.pathname === "/admin") {
       html(response, renderAdminHtml(principal.user, options.config.identitySettingsUrl));
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/admin/propose-adapter") {
+      try {
+        const body = await readJsonBody(request);
+        const result = await proposeHostAdapter({
+          hostOrUrl: String(body.host ?? body.url ?? ""),
+          libraryDir: options.config.libraryDir,
+          apiKey: options.config.cursorApiKey,
+        });
+        json(response, 200, { ok: true, ...result });
+      } catch (error) {
+        json(response, 400, {
+          ok: false,
+          error: error instanceof Error ? error.message : "Could not propose an adapter.",
+        });
+      }
       return;
     }
     if (request.method === "GET" && (url.pathname === "/queue.json" || url.pathname === "/backlog.json")) {

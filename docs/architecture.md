@@ -48,6 +48,10 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/cloudExtract.ts`: no-repo Cursor Cloud Agent extract for unknown hosts.
   The SDK client stays behind this module so the Cursor account can change
   without rewriting the queue.
+- `src/cloudHosts.ts`: durable `cloud-hosts.json` fingerprints after a
+  successful cloud extract. `propose-adapter` and `POST /admin/propose-adapter`
+  launch a repo Cloud Agent that opens an adapter PR. That path is opt-in and
+  does not block the first listen. The agent must not merge.
 - `src/notifications.ts`: stable mobile action IDs.
 - `src/haActions.ts`: Home Assistant WebSocket listener.
 - `src/workflow.ts`: article decision handling.

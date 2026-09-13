@@ -293,6 +293,8 @@ describe("reader page", () => {
     expect(html).toContain("/health");
     expect(html).toContain("/library.json");
     expect(html).toContain("/queue.json");
+    expect(html).toContain("/admin/propose-adapter");
+    expect(html).toContain("Propose adapter PR");
     expect(html).toContain('<a class="navlink active" href="/admin">Admin</a>');
     expect(html).not.toContain("Culture");
   });

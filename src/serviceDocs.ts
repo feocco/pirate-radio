@@ -155,6 +155,47 @@ const pirateRadioOpenApi = {
         },
       },
     },
+    "/admin/propose-adapter": {
+      post: {
+        tags: ["service"],
+        summary: "Launch a repo Cloud Agent that opens a host adapter pull request",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  host: { type: "string" },
+                  url: { type: "string", format: "uri" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "The adapter agent was launched. The pull request is not merged.",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    ok: { type: "boolean", const: true },
+                    host: { type: "string" },
+                    agentId: { type: "string" },
+                    prUrl: { type: "string" },
+                  },
+                  required: ["ok", "host"],
+                },
+              },
+            },
+          },
+          "400": { description: "Missing CURSOR_API_KEY or an invalid host." },
+          "403": { description: "Authenticated member is not in pirate-radio-admins." },
+        },
+      },
+    },
     "/library.json": {
       get: {
         tags: ["library"],
@@ -678,6 +719,7 @@ const endpointDocs: EndpointDoc[] = [
   { method: "GET", path: "/openapi.json", description: "OpenAPI 3.1 JSON for machine-readable route details." },
   { method: "GET", path: "/", description: "Main audio library page for converted articles." },
   { method: "GET", path: "/admin", description: "Admin quick-links page for operator checks." },
+  { method: "POST", path: "/admin/propose-adapter", description: "Admin-only Cloud Agent that opens a host adapter PR and does not merge it." },
   { method: "GET", path: "/library.json", description: "Library manifest consumed by the reader UI." },
   { method: "GET", path: "/article/{slug}", description: "Dedicated article page with audio and story text." },
   { method: "POST", path: "/admin/articles/{slug}/delete", description: "Admin-only recoverable article deletion." },

@@ -39,14 +39,18 @@ export interface CloudAgentRunResult {
   status: "finished" | "error" | "cancelled" | string;
   result?: string;
   error?: { message?: string };
+  git?: { branches?: Array<{ repoUrl?: string; branch?: string; prUrl?: string }> };
 }
 
 export interface CloudAgentHandle {
+  agentId?: string;
   send(message: string): Promise<{ wait(): Promise<CloudAgentRunResult> }>;
   listArtifacts(): Promise<Array<{ path: string }>>;
   downloadArtifact(path: string): Promise<Buffer>;
   close(): void;
 }
+
+export const PIRATE_RADIO_REPO_URL = "https://github.com/feocco/pirate-radio";
 
 export interface CloudAgentCreateInput {
   apiKey: string;
@@ -238,6 +242,91 @@ export async function extractStoryViaCloud(
     }
 
     return parseCloudExtractArtifact(raw, request.url, request.anchors, options.now);
+  } finally {
+    agent.close();
+  }
+}
+
+export function buildHostAdapterPrompt(input: {
+  host: string;
+  sourceUrl?: string;
+  fingerprint?: { anchors?: CloudExtractAnchors; selectors?: string[] };
+}): string {
+  const lines = [
+    `Add a first-class Pirate Radio host adapter for ${input.host}.`,
+    "Open a pull request. Do not merge or enable auto-merge.",
+    "",
+    "Reuse the public HTML extract path in src/extractor.ts and src/browser.ts.",
+    "Follow the Substack/public fetch pattern, not Playwright, unless the host is paywalled.",
+    "Do not scrape X. X Articles stay on the official Post lookup API.",
+    "Do not add Mozilla Readability as a generic product path.",
+    "Keep validateArticleUrl, library sourceType, and the queue convert-url path in sync.",
+    "Cover the new host with focused tests.",
+  ];
+  if (input.sourceUrl) {
+    lines.push(`Example URL from a successful cloud extract: ${input.sourceUrl}`);
+  }
+  if (input.fingerprint?.selectors?.length) {
+    lines.push(`Selectors observed during cloud extract: ${input.fingerprint.selectors.join(", ")}`);
+  }
+  if (input.fingerprint?.anchors?.firstSentence) {
+    lines.push(`First-sentence anchor that worked: ${input.fingerprint.anchors.firstSentence}`);
+  }
+  if (input.fingerprint?.anchors?.lastSentence) {
+    lines.push(`Last-sentence anchor that worked: ${input.fingerprint.anchors.lastSentence}`);
+  }
+  return lines.join("\n");
+}
+
+export async function proposeHostAdapter(input: {
+  hostOrUrl: string;
+  libraryDir: string;
+  apiKey?: string;
+  createAgent?: CloudAgentFactory;
+  repoUrl?: string;
+}): Promise<{ host: string; agentId?: string; prUrl?: string }> {
+  const { markCloudHostAdapterRequested, normalizeCloudHost, readCloudHostStore } = await import("./cloudHosts.js");
+  const host = normalizeCloudHost(input.hostOrUrl);
+  const apiKey = input.apiKey ?? cursorApiKeyFromEnv();
+  if (!apiKey) {
+    throw new Error(MISSING_CURSOR_API_KEY_MESSAGE);
+  }
+
+  const store = await readCloudHostStore(input.libraryDir);
+  const existing = store.hosts[host];
+  const createAgent = input.createAgent ?? createCursorSdkAgent;
+  const agent = await createAgent({
+    apiKey,
+    cloud: {
+      repos: [{ url: input.repoUrl ?? PIRATE_RADIO_REPO_URL, startingRef: "main" }],
+      autoCreatePR: true,
+    },
+  });
+
+  try {
+    const run = await agent.send(
+      buildHostAdapterPrompt({
+        host,
+        sourceUrl: existing?.lastSourceUrl,
+        fingerprint: existing?.fingerprint,
+      }),
+    );
+    const result = await run.wait();
+    if (result.status !== "finished") {
+      throw new Error(result.error?.message || "Host adapter agent failed.");
+    }
+    const prUrl = result.git?.branches?.find((branch) => branch.prUrl)?.prUrl;
+    const record = await markCloudHostAdapterRequested({
+      libraryDir: input.libraryDir,
+      host,
+      agentId: agent.agentId,
+      ...(prUrl ? { prUrl } : {}),
+    });
+    return {
+      host: record.host,
+      ...(record.adapterAgentId ? { agentId: record.adapterAgentId } : {}),
+      ...(record.adapterPrUrl ? { prUrl: record.adapterPrUrl } : {}),
+    };
   } finally {
     agent.close();
   }
