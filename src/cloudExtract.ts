@@ -59,14 +59,28 @@ export interface CloudAgentHandle {
 
 export const PIRATE_RADIO_REPO_URL = "https://github.com/feocco/pirate-radio";
 
+export interface CloudAgentRepoRef {
+  url: string;
+  startingRef?: string;
+}
+
 export interface CloudAgentCreateInput {
   apiKey: string;
-  cloud:
-    | { repos: [] }
-    | {
-        repos: Array<{ url: string; startingRef?: string }>;
-        autoCreatePR?: boolean;
-      };
+  cloud: {
+    repos: CloudAgentRepoRef[];
+    autoCreatePR?: boolean;
+  };
+}
+
+/** Attach pirate-radio so repo-scoped CURSOR_API_KEY values can create the agent. */
+export function pirateRadioCloudCreateOptions(options: {
+  repoUrl?: string;
+  autoCreatePR?: boolean;
+} = {}): CloudAgentCreateInput["cloud"] {
+  return {
+    repos: [{ url: options.repoUrl ?? PIRATE_RADIO_REPO_URL, startingRef: "main" }],
+    ...(options.autoCreatePR ? { autoCreatePR: true } : {}),
+  };
 }
 
 export type CloudAgentFactory = (input: CloudAgentCreateInput) => Promise<CloudAgentHandle>;
@@ -269,7 +283,7 @@ export async function extractStoryViaCloud(
     return await withCloudAgentTimeout(async () => {
       agent = await createAgent({
         apiKey,
-        cloud: { repos: [] },
+        cloud: pirateRadioCloudCreateOptions(),
       });
       const run = await agent.send(buildCloudExtractPrompt(request));
       const result = await run.wait();
@@ -409,10 +423,10 @@ export async function proposeHostAdapter(input: {
     return await withCloudAgentTimeout(async () => {
       agent = await createAgent({
         apiKey,
-        cloud: {
-          repos: [{ url: input.repoUrl ?? PIRATE_RADIO_REPO_URL, startingRef: "main" }],
+        cloud: pirateRadioCloudCreateOptions({
+          repoUrl: input.repoUrl,
           autoCreatePR: true,
-        },
+        }),
       });
       const run = await agent.send(
         buildHostAdapterPrompt({

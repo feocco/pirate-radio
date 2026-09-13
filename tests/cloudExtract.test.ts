@@ -12,6 +12,8 @@ import {
   decodeArtifactBytes,
   extractStoryViaCloud,
   MISSING_CURSOR_API_KEY_MESSAGE,
+  PIRATE_RADIO_REPO_URL,
+  pirateRadioCloudCreateOptions,
   normalizeExtractAnchors,
   parseCloudExtractArtifact,
   pickStoryArtifactPath,
@@ -156,13 +158,54 @@ describe("cloud extract contract", () => {
     expect(normalizeExtractAnchors({})).toBeUndefined();
   });
 
+  test("create options attach pirate-radio and omit autoCreatePR unless requested", () => {
+    expect(pirateRadioCloudCreateOptions()).toEqual({
+      repos: [{ url: PIRATE_RADIO_REPO_URL, startingRef: "main" }],
+    });
+    expect(pirateRadioCloudCreateOptions()).not.toHaveProperty("autoCreatePR");
+    expect(pirateRadioCloudCreateOptions({ autoCreatePR: true })).toEqual({
+      repos: [{ url: PIRATE_RADIO_REPO_URL, startingRef: "main" }],
+      autoCreatePR: true,
+    });
+    expect(
+      pirateRadioCloudCreateOptions({
+        repoUrl: "https://github.com/example/override",
+        autoCreatePR: true,
+      }),
+    ).toEqual({
+      repos: [{ url: "https://github.com/example/override", startingRef: "main" }],
+      autoCreatePR: true,
+    });
+  });
+
+  test("extractStoryViaCloud creates a repo-scoped agent and does not request a PR", async () => {
+    const createAgent = mockCloudAgent({
+      title: "We Must Pace the Frontier",
+      text: "I think we should pace.",
+      sourceUrl: "https://darioamodei.com/post/we-must-pace-the-frontier",
+      extractedAt: "2026-09-13T12:00:00.000Z",
+    });
+
+    await extractStoryViaCloud(
+      { url: "https://darioamodei.com/post/we-must-pace-the-frontier" },
+      { apiKey: "crsr_test", createAgent },
+    );
+
+    expect(createAgent).toHaveBeenCalledTimes(1);
+    const input = vi.mocked(createAgent).mock.calls[0]?.[0];
+    expect(input?.cloud.repos.length).toBeGreaterThan(0);
+    expect(input?.cloud.repos).toEqual([{ url: PIRATE_RADIO_REPO_URL, startingRef: "main" }]);
+    expect(input?.cloud).not.toHaveProperty("autoCreatePR");
+    expect(input?.cloud.autoCreatePR).toBeFalsy();
+  });
+
   test("fails closed when CURSOR_API_KEY is missing", async () => {
     await expect(
       extractStoryViaCloud({ url: "https://darioamodei.com/post/we-must-pace-the-frontier" }),
     ).rejects.toThrow(MISSING_CURSOR_API_KEY_MESSAGE);
   });
 
-  test("launches a no-repo agent, downloads the Story artifact, and writes a library item", async () => {
+  test("launches a pirate-radio agent without opening a PR, downloads the Story artifact, and writes a library item", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "pirate-cloud-extract-"));
     const sourceUrl = "https://darioamodei.com/post/we-must-pace-the-frontier";
     const createAgent = mockCloudAgent({
@@ -184,8 +227,13 @@ describe("cloud extract contract", () => {
 
     expect(createAgent).toHaveBeenCalledWith({
       apiKey: "crsr_test",
-      cloud: { repos: [] },
+      cloud: {
+        repos: [{ url: PIRATE_RADIO_REPO_URL, startingRef: "main" }],
+      },
     });
+    const extractCloud = vi.mocked(createAgent).mock.calls[0]?.[0].cloud;
+    expect(extractCloud?.repos).toEqual([{ url: PIRATE_RADIO_REPO_URL, startingRef: "main" }]);
+    expect(extractCloud).not.toHaveProperty("autoCreatePR");
     expect(story).toMatchObject({
       title: "We Must Pace the Frontier",
       author: "Dario Amodei",
