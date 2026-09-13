@@ -13,6 +13,8 @@ import { extractXArticleFromUrl } from "./xArticle.js";
 export interface ExtractStoryFromUrlOptions extends CloudExtractAnchors {
   apiKey?: string;
   createAgent?: CloudAgentFactory;
+  libraryDir?: string;
+  timeoutMs?: number;
 }
 
 export const PROFILE_DIR = ".playwright-profile";
@@ -61,8 +63,18 @@ export async function extractStoryFromUrl(
       {
         ...(options.apiKey ? { apiKey: options.apiKey } : {}),
         ...(options.createAgent ? { createAgent: options.createAgent } : {}),
+        ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
       },
     );
+    if (options.libraryDir) {
+      const { recordCloudHostExtract } = await import("./cloudHosts.js");
+      await recordCloudHostExtract({
+        libraryDir: options.libraryDir,
+        sourceUrl: validation.url,
+        ...(normalizeExtractAnchors(options) ? { anchors: normalizeExtractAnchors(options) } : {}),
+        ...(parsed.selectors ? { selectors: parsed.selectors } : {}),
+      });
+    }
     return parsed.story;
   }
 

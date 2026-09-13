@@ -644,6 +644,14 @@ export function renderAdminHtml(user?: ApplicationUser, identitySettingsUrl?: st
       <div class="admin-label">Queue</div>
       <div><a class="readlink" href="/queue.json">Open JSON</a></div>
     </section>
+    <section class="admin-row">
+      <div class="admin-label">Host adapter</div>
+      <form id="adapter-form" class="url-queue">
+        <input id="adapter-host" class="search" type="text" placeholder="Host or article URL" aria-label="Host or article URL">
+        <button id="adapter-submit" class="button" type="submit">Propose adapter PR</button>
+        <div id="adapter-status" class="status" role="status"></div>
+      </form>
+    </section>
   </main>
   <script>
     const health = document.getElementById("health");
@@ -651,6 +659,40 @@ export function renderAdminHtml(user?: ApplicationUser, identitySettingsUrl?: st
       .then((response) => response.ok ? response.json() : Promise.reject(new Error("Health check failed")))
       .then((payload) => { health.textContent = payload.ok ? "OK" : "Unexpected response"; })
       .catch((error) => { health.textContent = error.message; });
+    const adapterForm = document.getElementById("adapter-form");
+    const adapterHost = document.getElementById("adapter-host");
+    const adapterSubmit = document.getElementById("adapter-submit");
+    const adapterStatus = document.getElementById("adapter-status");
+    adapterForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      adapterStatus.className = "status";
+      adapterStatus.textContent = "";
+      adapterSubmit.disabled = true;
+      adapterSubmit.textContent = "Queueing";
+      try {
+        const response = await fetch("/admin/propose-adapter", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ host: adapterHost.value }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Could not propose an adapter.");
+        }
+        adapterStatus.textContent = payload.prUrl
+          ? "Opened " + payload.prUrl + ". Review it; do not auto-merge."
+          : payload.status === "processing"
+            ? "Adapter agent already running for this host."
+            : "Adapter agent queued. Review the pull request; do not auto-merge.";
+        adapterHost.value = "";
+      } catch (error) {
+        adapterStatus.className = "status error";
+        adapterStatus.textContent = error.message;
+      } finally {
+        adapterSubmit.disabled = false;
+        adapterSubmit.textContent = "Propose adapter PR";
+      }
+    });
   </script>
 </body>
 </html>`;

@@ -45,6 +45,16 @@ X Articles use the official X Post lookup API and require
 Unsupported `https` article URLs require `CURSOR_API_KEY` and launch a no-repo
 Cursor Cloud Agent that writes `artifacts/story.json`. Optional
 `--first-sentence` and `--last-sentence` pin the extract to inclusive anchors.
+A successful cloud extract records the host fingerprint in
+`cloud-hosts.json`. That write does not open an adapter PR.
+
+To open a first-class host adapter PR later, without merging it:
+
+```bash
+npm run cli -- propose-adapter "https://darioamodei.com/post/we-must-pace-the-frontier"
+```
+
+Admins can send the same request from `/admin` to `POST /admin/propose-adapter`.
 
 ## Generate Audio
 

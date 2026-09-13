@@ -48,6 +48,10 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/cloudExtract.ts`: no-repo Cursor Cloud Agent extract for unknown hosts.
   The SDK client stays behind this module so the Cursor account can change
   without rewriting the queue.
+- `src/cloudHosts.ts`: durable `cloud-hosts.json` fingerprints after a
+  successful cloud extract. `propose-adapter` and `POST /admin/propose-adapter`
+  launch a repo Cloud Agent that opens an adapter PR. That path is opt-in and
+  does not block the first listen. The agent must not merge.
 - `src/notifications.ts`: stable mobile action IDs.
 - `src/haActions.ts`: Home Assistant WebSocket listener.
 - `src/workflow.ts`: article decision handling.
@@ -112,8 +116,9 @@ duplicate identity settings UI.
 
 Postgres owns users, hashed sessions, one-time OIDC transactions, per-user
 progress/completion, submissions, and migration receipts. One shared filesystem
-library still owns MP3, story JSON/text, images, alignment, `index.json`, and
-RSS `state.json`. `progress.json` is retained only as migration/rollback input.
+library still owns MP3, story JSON/text, images, alignment, `index.json`,
+RSS `state.json`, and `cloud-hosts.json`. `progress.json` is retained only as
+migration/rollback input.
 Story JSON and `index.json` preserve an optional article author. Feed metadata
 backs RSS conversions; pasted HTML uses page author metadata; missing authors
 remain absent rather than displaying an unknown placeholder.
