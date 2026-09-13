@@ -6,7 +6,10 @@ import { extractStoryFromUrl } from "../src/browser.js";
 import {
   buildCloudExtractPrompt,
   classifyUnsupportedHttpsArticleUrl,
+  CLOUD_EXTRACT_TIMEOUT_MESSAGE,
+  cloudExtractSlug,
   cursorApiKeyFromEnv,
+  decodeArtifactBytes,
   extractStoryViaCloud,
   MISSING_CURSOR_API_KEY_MESSAGE,
   normalizeExtractAnchors,
@@ -31,7 +34,7 @@ function mockCloudAgent(artifact: unknown): CloudAgentFactory {
       wait: async () => ({ status: "finished" as const }),
     })),
     listArtifacts: async () => [{ path: "artifacts/story.json" }],
-    downloadArtifact: async () => Buffer.from(JSON.stringify(artifact)),
+    downloadArtifact: async () => new Uint8Array(Buffer.from(JSON.stringify(artifact))),
     close: vi.fn(),
   }));
 }
@@ -43,7 +46,7 @@ describe("cloud extract contract", () => {
     ).toEqual({
       ok: true,
       url: "https://darioamodei.com/post/we-must-pace-the-frontier",
-      slug: "we-must-pace-the-frontier",
+      slug: "darioamodei-com-we-must-pace-the-frontier",
       sourceType: "cloud-extract",
       sourceName: "darioamodei.com",
     });
@@ -190,14 +193,15 @@ describe("cloud extract contract", () => {
     });
 
     const state = createInitialState();
-    state.pending["we-must-pace-the-frontier"] = {
+    const slug = cloudExtractSlug(sourceUrl);
+    state.pending[slug] = {
       id: sourceUrl,
       title: "We Must Pace The Frontier",
       url: sourceUrl,
       author: "",
       publishedAt: "",
       description: "Queued from pasted darioamodei.com URL.",
-      slug: "we-must-pace-the-frontier",
+      slug,
       sourceType: "cloud-extract",
       sourceName: "darioamodei.com",
       canonicalUrl: sourceUrl,
@@ -205,7 +209,7 @@ describe("cloud extract contract", () => {
 
     const result = await handleArticleDecision({
       decision: "accept",
-      slug: "we-must-pace-the-frontier",
+      slug,
       state,
       libraryDir: tempDir,
       readArticle: async () => story,
@@ -233,7 +237,7 @@ describe("cloud extract contract", () => {
         wait: async () => ({ status: "error", error: { message: "agent exploded" } }),
       }),
       listArtifacts: async () => [],
-      downloadArtifact: async () => Buffer.from(""),
+      downloadArtifact: async () => new Uint8Array(),
       close: vi.fn(),
     });
 
@@ -243,5 +247,39 @@ describe("cloud extract contract", () => {
         { apiKey: "crsr_test", createAgent },
       ),
     ).rejects.toThrow("agent exploded");
+  });
+
+  test("decodes Uint8Array artifact bytes as UTF-8 instead of comma-joined values", () => {
+    const json = '{"title":"Pacing"}';
+    const bytes = new Uint8Array(Buffer.from(json));
+    expect(String(bytes)).toContain(",");
+    expect(decodeArtifactBytes(bytes)).toBe(json);
+    expect(decodeArtifactBytes(Buffer.from(json))).toBe(json);
+  });
+
+  test("namespaces cloud-extract slugs by host", () => {
+    expect(cloudExtractSlug("https://darioamodei.com/post/we-must-pace-the-frontier")).toBe(
+      "darioamodei-com-we-must-pace-the-frontier",
+    );
+    expect(cloudExtractSlug("https://example.com/p/test-story")).toBe("example-com-test-story");
+    expect(cloudExtractSlug("https://www.example.com/p/test-story")).toBe("example-com-test-story");
+  });
+
+  test("fails closed when the cloud agent wait exceeds the timeout", async () => {
+    const createAgent: CloudAgentFactory = async () => ({
+      send: async () => ({
+        wait: () => new Promise(() => {}),
+      }),
+      listArtifacts: async () => [],
+      downloadArtifact: async () => new Uint8Array(),
+      close: vi.fn(),
+    });
+
+    await expect(
+      extractStoryViaCloud(
+        { url: "https://darioamodei.com/post/we-must-pace-the-frontier" },
+        { apiKey: "crsr_test", createAgent, timeoutMs: 20 },
+      ),
+    ).rejects.toThrow(CLOUD_EXTRACT_TIMEOUT_MESSAGE);
   });
 });
