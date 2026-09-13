@@ -13,6 +13,8 @@ runtime configuration in `homelab-config`.
 - Preserve the existing CLI commands: `login`, `extract`, `speak`, `read`,
   `poll`, `serve`, and `simulate`. The additive `migrate-progress` and
   `export-progress` commands own the legacy progress cutover and rollback.
+  The additive `propose-adapter` command opens a host adapter PR and does not
+  merge it.
 
 ## Verification
 

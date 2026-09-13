@@ -5,6 +5,7 @@ import { cacheStoryImage } from "./assets.js";
 import type { PirateArticle } from "./feed.js";
 import { appendLibraryItem, type LibraryItem } from "./library.js";
 import { readLibraryManifest } from "./library.js";
+import { cloudExtractSlug } from "./cloudExtract.js";
 import { storySlug } from "./output.js";
 import { sanitizeSlug } from "./slug.js";
 import { createInitialState, type PirateRadioState } from "./state.js";
@@ -92,7 +93,7 @@ export async function handleArticleDecision(
 
   const story = await input.readArticle(article.url);
   story.author = normalizedAuthor(story.author) ?? normalizedAuthor(article.author);
-  const slug = storySlug(story);
+  const slug = librarySlugForArticle(article, story);
   const textDir = join(input.libraryDir, "text");
   const storyDir = join(input.libraryDir, "stories");
   const audioDir = join(input.libraryDir, "audio");
@@ -243,7 +244,7 @@ export async function refreshLibraryArticle(
 
   const story = await input.readArticle(item.sourceUrl);
   story.author = normalizedAuthor(story.author) ?? normalizedAuthor(item.author);
-  const slug = storySlug(story);
+  const slug = item.slug;
   const cachedImage = await (input.cacheImage ?? cacheStoryImage)({
     libraryDir: input.libraryDir,
     slug,
@@ -343,6 +344,13 @@ function customTextStory(title: string, text: string, slug: string, now: Date): 
     characterCount: text.length,
     extractedAt: now.toISOString(),
   };
+}
+
+function librarySlugForArticle(article: PirateArticle, story: Story): string {
+  if (article.sourceType === "cloud-extract") {
+    return article.slug ?? cloudExtractSlug(story.sourceUrl);
+  }
+  return storySlug(story);
 }
 
 async function tryCacheStoryImage(

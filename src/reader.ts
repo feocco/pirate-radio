@@ -168,6 +168,7 @@ const sharedCss = `
 
   .url-queue { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2); margin: var(--space-4) auto 0; padding-bottom: var(--space-3); }
   .url-queue .search { width: 100%; min-width: 0; }
+  .url-queue .anchors { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
   .text-queue { display: grid; grid-template-columns: minmax(180px, 280px) 1fr auto; align-items: start; gap: var(--space-2); margin: 0 auto; padding-bottom: var(--space-4); border-bottom: 1px solid var(--rule-soft); }
   .text-queue .search { width: 100%; min-width: 0; }
   .textarea { min-height: 150px; resize: vertical; }
@@ -214,6 +215,7 @@ const sharedCss = `
     .toolbar { align-items: stretch; }
     .select, .search { width: 100%; }
     .url-queue, .text-queue { grid-template-columns: 1fr; }
+    .url-queue .anchors { grid-template-columns: 1fr; }
     .queue-row { grid-template-columns: 1fr; }
     .queue-row .actions { justify-content: flex-start; min-width: 0; }
     .article-meta, .admin-row { display: block; }
@@ -419,11 +421,15 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
   <section class="hero wrap">
     <div class="kicker">Audio queue</div>
     <h1>Queue</h1>
-    <p class="deck">Recent monitored articles, pasted URLs, and custom text that can be queued for audio generation.</p>
+    <p class="deck">Recent monitored articles, pasted URLs, and custom text that can be queued for audio generation. Unsupported https article URLs use a Cursor cloud extract when CURSOR_API_KEY is set.</p>
   </section>
   <form id="url-queue" class="url-queue wrap">
-    <input id="article-url" class="search" type="url" placeholder="Paste an article URL (Pirate Wires, Substack, or X)." aria-label="Paste article URL">
+    <input id="article-url" class="search" type="url" placeholder="Paste an article URL (Pirate Wires, Substack, X, or any https article)." aria-label="Paste article URL">
     <button id="queue-url" class="button" type="submit">Convert URL</button>
+    <div class="anchors">
+      <input id="first-sentence" class="search" type="text" placeholder="Optional first sentence" aria-label="Optional first sentence">
+      <input id="last-sentence" class="search" type="text" placeholder="Optional last sentence" aria-label="Optional last sentence">
+    </div>
     <div id="url-status" class="status" role="status"></div>
   </form>
   <form id="text-queue" class="text-queue wrap">
@@ -459,6 +465,8 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
     const pageLabel = document.getElementById("page");
     const urlForm = document.getElementById("url-queue");
     const articleUrl = document.getElementById("article-url");
+    const firstSentence = document.getElementById("first-sentence");
+    const lastSentence = document.getElementById("last-sentence");
     const queueUrlButton = document.getElementById("queue-url");
     const urlStatus = document.getElementById("url-status");
     const textForm = document.getElementById("text-queue");
@@ -594,7 +602,11 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
         const response = await fetch("/queue/convert-url", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ url: articleUrl.value }),
+          body: JSON.stringify({
+            url: articleUrl.value,
+            firstSentence: firstSentence.value,
+            lastSentence: lastSentence.value,
+          }),
         });
         const payload = await response.json();
         if (!response.ok || !payload.ok) {
@@ -608,6 +620,8 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
           urlStatus.textContent = "Queued. You will get a notification when audio is ready.";
         }
         articleUrl.value = "";
+        firstSentence.value = "";
+        lastSentence.value = "";
       } catch (error) {
         urlStatus.className = "status error";
         urlStatus.textContent = error.message;
@@ -752,6 +766,14 @@ export function renderAdminHtml(user?: ApplicationUser, identitySettingsUrl?: st
       <div class="admin-label">Queue</div>
       <div><a class="readlink secondary" href="/queue.json">Open JSON</a></div>
     </section>
+    <section class="admin-row">
+      <div class="admin-label">Host adapter</div>
+      <form id="adapter-form" class="url-queue">
+        <input id="adapter-host" class="search" type="text" placeholder="Host or article URL" aria-label="Host or article URL">
+        <button id="adapter-submit" class="button" type="submit">Propose adapter PR</button>
+        <div id="adapter-status" class="status" role="status"></div>
+      </form>
+    </section>
   </main>
   <script>
     const health = document.getElementById("health");
@@ -759,6 +781,40 @@ export function renderAdminHtml(user?: ApplicationUser, identitySettingsUrl?: st
       .then((response) => response.ok ? response.json() : Promise.reject(new Error("Health check failed")))
       .then((payload) => { health.textContent = payload.ok ? "OK" : "Unexpected response"; })
       .catch((error) => { health.textContent = error.message; });
+    const adapterForm = document.getElementById("adapter-form");
+    const adapterHost = document.getElementById("adapter-host");
+    const adapterSubmit = document.getElementById("adapter-submit");
+    const adapterStatus = document.getElementById("adapter-status");
+    adapterForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      adapterStatus.className = "status";
+      adapterStatus.textContent = "";
+      adapterSubmit.disabled = true;
+      adapterSubmit.textContent = "Queueing";
+      try {
+        const response = await fetch("/admin/propose-adapter", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ host: adapterHost.value }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Could not propose an adapter.");
+        }
+        adapterStatus.textContent = payload.prUrl
+          ? "Opened " + payload.prUrl + ". Review it; do not auto-merge."
+          : payload.status === "processing"
+            ? "Adapter agent already running for this host."
+            : "Adapter agent queued. Review the pull request; do not auto-merge.";
+        adapterHost.value = "";
+      } catch (error) {
+        adapterStatus.className = "status error";
+        adapterStatus.textContent = error.message;
+      } finally {
+        adapterSubmit.disabled = false;
+        adapterSubmit.textContent = "Propose adapter PR";
+      }
+    });
   </script>
 </body>
 </html>`;

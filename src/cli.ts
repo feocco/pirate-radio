@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { Command } from "commander";
 import { openLoginBrowser, extractStoryFromUrl } from "./browser.js";
+import { proposeHostAdapter } from "./cloudExtract.js";
 import { configFromEnv } from "./config.js";
 import { validateIdentityConfig } from "./config.js";
 import { PirateRadioDatabase } from "./database.js";
@@ -28,10 +29,15 @@ program
 
 program
   .command("extract")
-  .argument("<url>", "Pirate Wires story URL")
+  .argument("<url>", "Article URL")
+  .option("--first-sentence <text>", "Inclusive first sentence for unsupported hosts")
+  .option("--last-sentence <text>", "Inclusive last sentence for unsupported hosts")
   .description("Extract story text, reader metadata, and write txt/json outputs.")
-  .action(async (url: string) => {
-    const story = await extractStoryFromUrl(url);
+  .action(async (url: string, options: { firstSentence?: string; lastSentence?: string }) => {
+    const story = await extractStoryFromUrl(url, {
+      ...options,
+      libraryDir: configFromEnv().libraryDir,
+    });
     const written = await writeStoryOutputs(story);
     console.log(`Text: ${written.textPath}`);
     console.log(`JSON: ${written.jsonPath}`);
@@ -61,12 +67,17 @@ program
 
 program
   .command("read")
-  .argument("<url>", "Pirate Wires story URL")
+  .argument("<url>", "Article URL")
   .option("--provider <provider>", "TTS provider", DEFAULT_TTS_PROVIDER)
   .option("--allow-over-budget", "Allow audio generation over the $1 estimate", false)
+  .option("--first-sentence <text>", "Inclusive first sentence for unsupported hosts")
+  .option("--last-sentence <text>", "Inclusive last sentence for unsupported hosts")
   .description("Extract a story and generate audio in one command.")
-  .action(async (url: string, options: { provider: string; allowOverBudget: boolean }) => {
-    const story = await extractStoryFromUrl(url);
+  .action(async (url: string, options: { provider: string; allowOverBudget: boolean; firstSentence?: string; lastSentence?: string }) => {
+    const story = await extractStoryFromUrl(url, {
+      ...options,
+      libraryDir: configFromEnv().libraryDir,
+    });
     const written = await writeStoryOutputs(story);
     const audioPath = await storyAudioPath(story);
     const provider = createTtsProvider(options.provider);
@@ -82,6 +93,28 @@ program
     console.log(`Provider: ${result.provider}`);
     console.log(`Estimated cost: $${result.estimatedCostUsd.toFixed(4)}`);
     console.log(`Audio: ${result.outputPath}`);
+  });
+
+program
+  .command("propose-adapter")
+  .argument("<host-or-url>", "Host or article URL to add a first-class extractor for")
+  .description("Launch a repo Cloud Agent that opens a host adapter PR. Does not merge.")
+  .action(async (hostOrUrl: string) => {
+    const config = configFromEnv();
+    const result = await proposeHostAdapter({
+      hostOrUrl,
+      libraryDir: config.libraryDir,
+      apiKey: config.cursorApiKey,
+    });
+    console.log(`Host: ${result.host}`);
+    if (result.agentId) {
+      console.log(`Agent: ${result.agentId}`);
+    }
+    if (result.prUrl) {
+      console.log(`PR: ${result.prUrl}`);
+    } else {
+      console.log("Adapter agent finished. Review the opened pull request. Do not merge it from this command.");
+    }
   });
 
 program

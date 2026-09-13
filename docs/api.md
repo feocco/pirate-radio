@@ -19,6 +19,12 @@ State-changing calls with a missing or foreign Origin return
 
 ## Admin article deletion
 
+`POST /admin/propose-adapter` is available only to `pirate-radio-admins`. It
+queues a repo Cursor Cloud Agent on `feocco/pirate-radio` to open a host
+adapter pull request and returns immediately. It does not wait on the agent
+and does not merge. The first listen for an unsupported host does not wait
+on this path.
+
 `POST /admin/articles/<slug>/delete` is available only to
 `pirate-radio-admins`. The article page exposes it behind a confirmation. A
 successful request archives the pre-delete manifest and generated article
@@ -51,4 +57,9 @@ this endpoint directly.
 `POST /queue/convert-url` accepts Pirate Wires and Substack `/p/...` URLs plus
 X `/<username>/status/<id>` URLs that contain an X Article. Ordinary X posts are
 rejected during extraction because they do not contain the structured Article
-payload.
+payload. Other `https` article URLs are accepted as `cloud-extract` when
+`CURSOR_API_KEY` is set. Optional `firstSentence` and `lastSentence` fields pin
+the extract to inclusive sentence anchors. The queue stays in `processing` while
+the no-repo Cloud Agent runs, then the existing TTS and ready-notification path
+continues. The service fails closed with a clear error or failure notification
+if the key is missing or the agent fails.

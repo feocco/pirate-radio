@@ -237,8 +237,20 @@ describe("backlog", () => {
       error: "Enter a valid URL.",
     });
     await expect(validateArticleUrl("https://example.com/p/test-story")).resolves.toEqual({
-      ok: false,
-      error: "Enter a supported article URL from Pirate Wires, Substack, or X.",
+      ok: true,
+      url: "https://example.com/p/test-story",
+      slug: "example-com-test-story",
+      sourceType: "cloud-extract",
+      sourceName: "example.com",
+    });
+    await expect(
+      validateArticleUrl("https://darioamodei.com/post/we-must-pace-the-frontier"),
+    ).resolves.toEqual({
+      ok: true,
+      url: "https://darioamodei.com/post/we-must-pace-the-frontier",
+      slug: "darioamodei-com-we-must-pace-the-frontier",
+      sourceType: "cloud-extract",
+      sourceName: "darioamodei.com",
     });
     await expect(validateArticleUrl("https://x.com/demishassabis")).resolves.toEqual({
       ok: false,
@@ -332,9 +344,9 @@ describe("backlog", () => {
     expect(startConversion).toHaveBeenCalledWith("2076957440109625718");
   });
 
-  test("queueing an unsupported URL reports a validation error", async () => {
+  test("queueing an unsupported URL without CURSOR_API_KEY reports a clear error", async () => {
     const result = await queueBacklogUrlConversion({
-      url: "https://example.com/p/direct-story",
+      url: "https://darioamodei.com/post/we-must-pace-the-frontier",
       manifest,
       state: createInitialState(),
       statePath: "/tmp/state.json",
@@ -346,7 +358,71 @@ describe("backlog", () => {
     expect(result).toEqual({
       ok: false,
       status: "invalid_url",
-      error: "Enter a supported article URL from Pirate Wires, Substack, or X.",
+      error: "CURSOR_API_KEY is required to extract unsupported article URLs.",
+    });
+  });
+
+  test("queueing an unsupported URL records cloud-extract pending state", async () => {
+    const state = createInitialState();
+    const startConversion = vi.fn(async () => {});
+
+    const result = await queueBacklogUrlConversion({
+      url: "https://darioamodei.com/post/we-must-pace-the-frontier",
+      firstSentence: "I think we should pace.",
+      lastSentence: "That is the work.",
+      cursorApiKey: "crsr_test",
+      manifest,
+      state,
+      statePath: "/tmp/state.json",
+      processingSlugs: new Set(),
+      writeState: vi.fn(async () => {}),
+      startConversion,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      status: "queued",
+      slug: "darioamodei-com-we-must-pace-the-frontier",
+    });
+    expect(state.pending["darioamodei-com-we-must-pace-the-frontier"]).toMatchObject({
+      url: "https://darioamodei.com/post/we-must-pace-the-frontier",
+      sourceType: "cloud-extract",
+      sourceName: "darioamodei.com",
+      canonicalUrl: "https://darioamodei.com/post/we-must-pace-the-frontier",
+      extractAnchors: {
+        firstSentence: "I think we should pace.",
+        lastSentence: "That is the work.",
+      },
+    });
+    expect(startConversion).toHaveBeenCalledWith("darioamodei-com-we-must-pace-the-frontier");
+  });
+
+  test("queueing an unsupported URL does not collide with a known-host slug", async () => {
+    const result = await queueBacklogUrlConversion({
+      url: "https://example.com/p/test-story",
+      cursorApiKey: "crsr_test",
+      manifest: {
+        ...manifest,
+        items: [
+          {
+            ...manifest.items[0],
+            slug: "test-story",
+            sourceUrl: "https://www.piratewires.com/p/test-story",
+            canonicalUrl: "https://www.piratewires.com/p/test-story",
+          },
+        ],
+      },
+      state: createInitialState(),
+      statePath: "/tmp/state.json",
+      processingSlugs: new Set(),
+      writeState: vi.fn(async () => {}),
+      startConversion: vi.fn(async () => {}),
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      status: "queued",
+      slug: "example-com-test-story",
     });
   });
 });
