@@ -16,7 +16,8 @@ pasted article URLs, and custom pasted text.
    profile, fetch public Substack HTML directly, or retrieve an X Article's
    structured `article` field and expanded author account through the official
    Post lookup API. Unsupported `https` article URLs go through
-   `src/cloudExtract.ts`, which launches a no-repo Cursor Cloud Agent, waits
+   `src/cloudExtract.ts`, which launches a Cursor Cloud Agent against
+   `feocco/pirate-radio` without opening a PR, waits
    for a Story JSON artifact, and then uses the same story-to-TTS path.
    Custom text entries skip extraction and create a story object directly from
    title/body.
@@ -45,7 +46,9 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/auth.ts`: OIDC state/nonce/PKCE, opaque sessions, cookies, and group checks.
 - `src/database.ts`: numbered Postgres migrations and app-owned user state.
 - `src/backlog.ts`: RSS queue status and async conversion queue helpers.
-- `src/cloudExtract.ts`: no-repo Cursor Cloud Agent extract for unknown hosts.
+- `src/cloudExtract.ts`: Cursor Cloud Agent extract for unknown hosts. The
+  extract agent attaches `feocco/pirate-radio` so a repository-scoped
+  `CURSOR_API_KEY` can create it, and it does not open a PR.
   The SDK client stays behind this module so the Cursor account can change
   without rewriting the queue.
 - `src/cloudHosts.ts`: durable `cloud-hosts.json` fingerprints after a
