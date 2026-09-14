@@ -301,12 +301,48 @@ describe("attachCastControl", () => {
     await flushPrompt();
     expect(button.disabled).toBe(false);
   });
+
+  test("does not rewind local playback when stopping an active Cast session", async () => {
+    const button = createButton();
+    (globalThis as unknown as { document: { createElement(): typeof button } }).document = {
+      createElement: () => button,
+    };
+    const remote = createRemote(true);
+    const audio = createAudio(remote);
+    remote.prompt = async () => {
+      if (remote.state === "connected") {
+        remote.state = "disconnected";
+        remote.listeners.get("disconnect")?.();
+        return;
+      }
+      remote.state = "connecting";
+      remote.listeners.get("connecting")?.();
+      audio.currentTime = 90;
+      audio.paused = false;
+      remote.state = "connected";
+      remote.listeners.get("connect")?.();
+    };
+    const player = createPlayer(audio);
+
+    attachCastControl(player);
+    button.click();
+    await flushPrompt();
+    expect(remote.state).toBe("connected");
+    expect(audio.currentTime).toBe(90);
+
+    button.click();
+    await flushPrompt();
+    expect(remote.state).toBe("disconnected");
+    expect(audio.currentTime).toBe(90);
+    expect(button.getAttribute("aria-label")).toBe("Cast");
+  });
 });
 
 describe("media player client cast wiring", () => {
   test("embeds the Remote Playback helper and keeps audio session-protected", () => {
     const client = renderMediaPlayerClient();
-    expect(client).toContain("function attachCastControl");
+    expect(client).toContain("class CastPlayback");
+    expect(client).toContain("CastPlayback.attach");
     expect(client).toContain("watchAvailability");
     expect(client).toContain("remote.prompt()");
     expect(client).toContain("audio.disableRemotePlayback = false");
@@ -314,7 +350,10 @@ describe("media player client cast wiring", () => {
     expect(client).toContain("suppressProgressSaves");
     expect(client).toContain("onPromptStart");
     expect(client).toContain("onPromptEnd");
-    expect(client).toContain("restorePlayback(snapshot)");
+    expect(client).toContain("CastPlayback.restore");
+    expect(client).toContain("if (suppressProgressSaves) return");
+    expect(client).toContain("progressTimers.delete(track.slug)");
+    expect(client).toContain("wasRemoteSessionActive");
     expect(client).toContain("window.dispatchEvent(new Event(\"resize\"))");
     expect(client).toContain("button.innerHTML");
     expect(client).toContain("svg aria-hidden=");

@@ -68,8 +68,9 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/mediaPlayerCast.ts`: Cast button for Shikwasa's extra-controls menu.
   It stays hidden until Chrome reports a receiver. A failed or canceled Cast
   prompt snapshots and restores local playback position/rate so Chrome cannot
-  wipe progress when no device is chosen. Progress writes are suppressed for
-  that window. The player stays `fixed: static` so library pages do not pin
+  wipe progress when no device is chosen. Stopping an active Cast session does
+  not rewind to that pre-prompt snapshot. Progress writes are suppressed for
+  the picker window, including a write already queued before the prompt. The player stays `fixed: static` so library pages do not pin
   every card to the viewport; width is constrained to the container so
   Shikwasa's own 640px layout and resize marquee can shrink on a phone.
 - `src/progress.ts`: legacy JSON reader used only for cutover and rollback.

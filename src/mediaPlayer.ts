@@ -1,5 +1,5 @@
 import type { LibraryItem } from "./library.js";
-import { attachCastControl } from "./mediaPlayerCast.js";
+import { CastPlayback } from "./mediaPlayerCast.js";
 import { ACCENT } from "./theme.js";
 
 export interface MediaPlayerTrack {
@@ -97,6 +97,7 @@ export function renderMediaPlayerClient(userId?: string): string {
       localStorage.setItem(keyFor(slug), String(audio.currentTime));
       clearTimeout(progressTimers.get(slug));
       const write = () => {
+        if (suppressProgressSaves) return;
         fetch("/progress/" + encodeURIComponent(slug), {
           method: "PUT",
           headers: { "content-type": "application/json" },
@@ -136,9 +137,13 @@ export function renderMediaPlayerClient(userId?: string): string {
       });
       const audio = player.audio;
       audio.disableRemotePlayback = false;
-      ${attachCastControl.toString()}
-      const detachCast = attachCastControl(player, {
-        onPromptStart() { suppressProgressSaves = true; },
+      ${CastPlayback.toString()}
+      const detachCast = CastPlayback.attach(player, {
+        onPromptStart() {
+          suppressProgressSaves = true;
+          clearTimeout(progressTimers.get(track.slug));
+          progressTimers.delete(track.slug);
+        },
         onPromptEnd() { suppressProgressSaves = false; },
       });
       const onPageHide = () => saveProgress(track.slug, audio, true);
