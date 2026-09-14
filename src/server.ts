@@ -269,9 +269,9 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
     if (request.method === "GET" && url.pathname === "/auth/callback") {
       try {
         const result = await options.authenticator.callback(url, request.headers.cookie);
+        response.setHeader("Set-Cookie", [result.sessionCookie, result.transactionCookie]);
         response.writeHead(302, {
           location: result.returnTo,
-          "set-cookie": [result.sessionCookie, result.transactionCookie],
           "cache-control": "no-store",
         });
         response.end();
