@@ -73,8 +73,9 @@ allowlist + secrets), and the build/run lifecycle, see
 The cloud dev stack is defined in `.cursor/environment.json` + `scripts/dev/`
 (all dev-only; never used by the homelab runtime):
 
-- `install` (`scripts/dev/install.sh`, runs at Build): `npm ci`, Playwright
-  chromium, local Postgres, `npm run build`.
+- `install` (`scripts/dev/install.sh`, runs at Build): `npm ci`,
+  `npm run build`, then the egress-dependent steps — Playwright chromium
+  (best-effort) and local Postgres (required).
 - `start` (`scripts/dev/start.sh`, per run): starts Postgres, ensures the
   `pirate_radio` role/db, and runs `scripts/dev/seed.mjs`.
 - `terminals`: `scripts/dev/local-oidc.mjs` (local OIDC issuer) and
@@ -96,6 +97,13 @@ Durable gotchas and clarifications:
   next freshly-booted agent) to enable it. Until then `npm test` +
   `npm run build` are the checks a cloud agent can actually complete, which is
   the same work the Dockerfile's build stage runs.
+- A fresh (non-incremental) Build needs `storage.googleapis.com` (Playwright's
+  `cdn.playwright.dev` redirects the Chromium zip there) and
+  `archive.ubuntu.com` + `security.ubuntu.com` (apt for Postgres; the base
+  image is Ubuntu) on the Network Access allowlist. Missing Chromium only
+  disables browser-based `login`/`extract`; missing Postgres fails the Build,
+  and `start.sh` then skips database setup and seed so `npm test` and
+  `npm run build` still work.
 - `npm test` runs offline against mocks/fixtures. The Postgres integration suite
   (`tests/database.integration.test.ts`) is skipped unless
   `PIRATE_RADIO_TEST_DATABASE_URL` points at a reachable Postgres.

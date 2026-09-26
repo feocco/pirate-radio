@@ -32,6 +32,20 @@ substackcdn.com
 *.substackcdn.com
 ```
 
+The Build's `install` (`scripts/dev/install.sh`) also downloads from hosts that
+are **not** in the default allowlist. Without them a fresh (non-incremental)
+Build fails with `INSTALL_FAILED` — Chromium's download is reset mid-TLS and
+apt returns `403 Forbidden`:
+
+```
+storage.googleapis.com   # cdn.playwright.dev 307-redirects Chromium here
+archive.ubuntu.com       # apt (postgresql) — the base image is Ubuntu 24.04
+security.ubuntu.com
+```
+
+`cdn.playwright.dev` alone is not sufficient for the same reason as
+`mcr.microsoft.com` below: the allowlisted host only serves a redirect.
+
 `docker build` additionally needs the Microsoft container registry **and** the
 blob CDN it redirects to. `mcr.microsoft.com` alone is not sufficient — the
 manifest resolves but every layer download fails:
