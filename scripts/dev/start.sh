@@ -16,6 +16,12 @@ if [ ! -f dist/src/cli.js ] || ! command -v pg_ctlcluster >/dev/null 2>&1; then
   bash scripts/dev/install.sh || echo "[start] install fallback had issues"
 fi
 
+if ! command -v pg_ctlcluster >/dev/null 2>&1; then
+  echo "[start] Postgres is not installed; skipping database setup and seed." >&2
+  echo "[start] \`serve\` needs it. See docs/cloud-agents.md (Network Access) for the apt allowlist domains." >&2
+  exit 0
+fi
+
 # Start Postgres (cluster binaries come from the Build; data dir resets per run).
 sudo pg_ctlcluster 16 main start 2>/dev/null || true
 for _ in $(seq 1 30); do
