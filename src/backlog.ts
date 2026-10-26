@@ -25,10 +25,12 @@ export interface BacklogItem {
   processing: boolean;
 }
 
+export type ProcessingSlugs = Pick<ReadonlySet<string>, "has">;
+
 export interface BuildBacklogItemsInput {
   articles: PirateArticle[];
   manifest: LibraryManifest;
-  processingSlugs: ReadonlySet<string>;
+  processingSlugs: ProcessingSlugs;
 }
 
 export interface QueueBacklogConversionInput {
@@ -37,7 +39,7 @@ export interface QueueBacklogConversionInput {
   manifest: LibraryManifest;
   state: PirateRadioState;
   statePath: string;
-  processingSlugs: Set<string>;
+  processingSlugs: ProcessingSlugs;
   writeState: (statePath: string, state: PirateRadioState) => Promise<void>;
   startConversion: (slug: string) => Promise<void>;
 }
@@ -54,7 +56,7 @@ export interface QueueBacklogUrlConversionInput {
   manifest: LibraryManifest;
   state: PirateRadioState;
   statePath: string;
-  processingSlugs: Set<string>;
+  processingSlugs: ProcessingSlugs;
   writeState: (statePath: string, state: PirateRadioState) => Promise<void>;
   startConversion: (slug: string) => Promise<void>;
 }
@@ -110,6 +112,7 @@ export async function queueBacklogConversion(
     return { ok: true, status: "converted" };
   }
   if (input.processingSlugs.has(input.slug)) {
+    void input.startConversion(input.slug);
     return { ok: true, status: "processing" };
   }
 
@@ -118,10 +121,7 @@ export async function queueBacklogConversion(
   input.state.pending[slug] = article;
   input.state.seen[article.id] = article;
   await input.writeState(input.statePath, input.state);
-  input.processingSlugs.add(slug);
-  void input.startConversion(slug).finally(() => {
-    input.processingSlugs.delete(slug);
-  });
+  void input.startConversion(slug);
   return { ok: true, status: "queued" };
 }
 
@@ -157,6 +157,7 @@ export async function queueBacklogUrlConversion(
     return { ok: true, status: "converted", slug: validation.slug };
   }
   if (input.processingSlugs.has(validation.slug)) {
+    void input.startConversion(validation.slug);
     return { ok: true, status: "processing", slug: validation.slug };
   }
 
@@ -164,10 +165,7 @@ export async function queueBacklogUrlConversion(
   input.state.pending[validation.slug] = article;
   input.state.seen[article.id] = article;
   await input.writeState(input.statePath, input.state);
-  input.processingSlugs.add(validation.slug);
-  void input.startConversion(validation.slug).finally(() => {
-    input.processingSlugs.delete(validation.slug);
-  });
+  void input.startConversion(validation.slug);
   return { ok: true, status: "queued", slug: validation.slug };
 }
 
