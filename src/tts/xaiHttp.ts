@@ -1,4 +1,6 @@
 export const XAI_TIMEOUT_MS = 60_000;
+export const XAI_TTS_TIMEOUT_MS = 120_000;
+export const XAI_TTS_RETRY_DELAYS_MS = [1_000, 4_000] as const;
 export const XAI_ERROR_BODY_LIMIT = 120;
 const MP3_BYTES_PER_SECOND = 16_000;
 

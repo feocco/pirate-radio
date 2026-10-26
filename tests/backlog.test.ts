@@ -9,6 +9,7 @@ import {
 import type { PirateArticle } from "../src/feed.js";
 import type { LibraryManifest } from "../src/library.js";
 import { createInitialState } from "../src/state.js";
+import { expectTimeoutBudget } from "./support/timeouts.js";
 
 const articles: PirateArticle[] = [
   {
@@ -100,46 +101,33 @@ describe("backlog", () => {
     expect(findBacklogArticle(articles, "missing-story")).toBeUndefined();
   });
 
-  test("queueing a backlog conversion records pending state and starts work once", async () => {
+  test("queueing a backlog conversion records pending state once and hands every submission to startConversion", async () => {
     const state = createInitialState();
-    const processingSlugs = new Set<string>();
+    const registry = new Set<string>();
     const writeState = vi.fn(async () => {});
-    let finishConversion: () => void = () => {};
-    const startConversion = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          finishConversion = resolve;
-        }),
-    );
+    const startConversion = vi.fn(async (slug: string) => {
+      registry.add(slug);
+    });
+    const input = {
+      slug: "unconverted-story",
+      articles,
+      manifest,
+      state,
+      statePath: "/tmp/state.json",
+      processingSlugs: { has: (slug: string) => registry.has(slug) },
+      writeState,
+      startConversion,
+    };
 
-    const result = await queueBacklogConversion({
-      slug: "unconverted-story",
-      articles,
-      manifest,
-      state,
-      statePath: "/tmp/state.json",
-      processingSlugs,
-      writeState,
-      startConversion,
-    });
-    const duplicate = await queueBacklogConversion({
-      slug: "unconverted-story",
-      articles,
-      manifest,
-      state,
-      statePath: "/tmp/state.json",
-      processingSlugs,
-      writeState,
-      startConversion,
-    });
+    const result = await queueBacklogConversion(input);
+    const duplicate = await queueBacklogConversion(input);
 
     expect(result).toEqual({ ok: true, status: "queued" });
     expect(duplicate).toEqual({ ok: true, status: "processing" });
     expect(state.pending["unconverted-story"]).toEqual(articles[1]);
     expect(state.seen[articles[1].id]).toEqual(articles[1]);
     expect(writeState).toHaveBeenCalledTimes(1);
-    expect(startConversion).toHaveBeenCalledTimes(1);
-    finishConversion();
+    expect(startConversion.mock.calls).toEqual([["unconverted-story"], ["unconverted-story"]]);
   });
 
   test("queueing clears stale approved state when no library item exists", async () => {
@@ -183,6 +171,8 @@ describe("backlog", () => {
   });
 
   test("queueing an unknown article returns missing", async () => {
+    const startConversion = vi.fn(async () => {});
+
     const result = await queueBacklogConversion({
       slug: "missing-story",
       articles,
@@ -191,10 +181,11 @@ describe("backlog", () => {
       statePath: "/tmp/state.json",
       processingSlugs: new Set(),
       writeState: vi.fn(async () => {}),
-      startConversion: vi.fn(async () => {}),
+      startConversion,
     });
 
     expect(result).toEqual({ ok: false, status: "missing" });
+    expect(startConversion).not.toHaveBeenCalled();
   });
 
   test("validates known pasted article URLs", async () => {
@@ -288,6 +279,27 @@ describe("backlog", () => {
     });
     expect(writeState).toHaveBeenCalledTimes(1);
     expect(startConversion).toHaveBeenCalledWith("direct-story");
+  });
+
+  test("queueing a pasted URL that is already processing joins without rewriting state", async () => {
+    const state = createInitialState();
+    const writeState = vi.fn(async () => {});
+    const startConversion = vi.fn(async () => {});
+
+    const result = await queueBacklogUrlConversion({
+      url: "https://www.piratewires.com/p/direct-story",
+      manifest,
+      state,
+      statePath: "/tmp/state.json",
+      processingSlugs: { has: (slug) => slug === "direct-story" },
+      writeState,
+      startConversion,
+    });
+
+    expect(result).toEqual({ ok: true, status: "processing", slug: "direct-story" });
+    expect(startConversion).toHaveBeenCalledWith("direct-story");
+    expect(writeState).not.toHaveBeenCalled();
+    expect(state.pending).toEqual({});
   });
 
   test("queueing a pasted Substack URL records pending source metadata", async () => {
@@ -424,5 +436,13 @@ describe("backlog", () => {
       status: "queued",
       slug: "example-com-test-story",
     });
+  });
+
+  test("a Substack redirect past its 10s budget returns the resolve error", async () => {
+    const timeout = expectTimeoutBudget(10_000, { globalFetch: true });
+    await expect(
+      validateArticleUrl("https://open.substack.com/pub/hyperdimensional/p/what-should-be-done"),
+    ).resolves.toEqual({ ok: false, error: "Could not resolve the Substack share URL." });
+    timeout.verify();
   });
 });

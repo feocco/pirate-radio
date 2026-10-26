@@ -14,5 +14,11 @@ export function createTtsProvider(providerName = DEFAULT_TTS_PROVIDER): TtsProvi
 export { XaiTtsProvider, type XaiTtsProviderOptions } from "./xai.js";
 export { splitSpeechInput } from "./chunk.js";
 export { wordsFromGraphTimestamps } from "./timestamps.js";
-export { mapXaiHttpError, nextChunkTimeOffset, XAI_TIMEOUT_MS } from "./xaiHttp.js";
+export {
+  mapXaiHttpError,
+  nextChunkTimeOffset,
+  XAI_TIMEOUT_MS,
+  XAI_TTS_RETRY_DELAYS_MS,
+  XAI_TTS_TIMEOUT_MS,
+} from "./xaiHttp.js";
 export type { TimedWord, TtsProvider, TtsRequest, TtsResult } from "./types.js";

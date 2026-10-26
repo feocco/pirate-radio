@@ -18,6 +18,7 @@ export interface ExtractStoryFromUrlOptions extends CloudExtractAnchors {
 }
 
 export const PROFILE_DIR = ".playwright-profile";
+const PUBLIC_ARTICLE_HTML_TIMEOUT_MS = 30_000;
 const LOGGED_IN_TEXT = "My Account";
 
 export class PirateWiresAuthRequiredError extends Error {
@@ -106,6 +107,7 @@ async function extractPublicStoryFromUrl(url: string): Promise<Story> {
       accept: "text/html,application/xhtml+xml",
       "user-agent": "pirate-radio/0.1",
     },
+    signal: AbortSignal.timeout(PUBLIC_ARTICLE_HTML_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new Error(`Could not load article: ${response.status} ${response.statusText}`);

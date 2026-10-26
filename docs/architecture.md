@@ -64,7 +64,10 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/library.ts`: durable manifest writer.
 - `src/mediaPlayer.ts`: shared Shikwasa media player for library and article
   views, including metadata escaping, playback-progress wiring, and a Cast
-  control that uses the audio element's Remote Playback API.
+  control that uses the audio element's Remote Playback API. Library players
+  request no audio or progress until first play, then resume before saving.
+  The article player preloads metadata and saved progress. Neither writes
+  progress until the listener plays or seeks.
 - `src/mediaPlayerCast.ts`: Cast button for Shikwasa's extra-controls menu.
   It stays hidden until Chrome reports a receiver. A failed or canceled Cast
   prompt snapshots and restores local playback position/rate so Chrome cannot

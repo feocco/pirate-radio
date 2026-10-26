@@ -377,7 +377,7 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
       downloadLink.textContent = "Download MP3";
       const playerHost = document.createElement("div");
       playerHost.className = "media-player compact";
-      libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item)));
+      libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item), "library"));
       const footer = document.createElement("div");
       footer.className = "card-player-footer";
       actions.append(readLink, downloadLink);
@@ -730,6 +730,7 @@ export function renderArticleHtml(
     const { audio } = mountMediaPlayer(
       document.getElementById("article-player"),
       ${serializeMediaPlayerTrackForScript(mediaPlayerTrack(item))},
+      "article",
     );
     ${item.hasAlignment && item.alignmentUrl ? renderAlignmentScript(item.alignmentUrl) : ""}
   </script>

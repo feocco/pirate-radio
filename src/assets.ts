@@ -1,6 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 
+const IMAGE_DOWNLOAD_TIMEOUT_MS = 30_000;
+
 export interface CachedImage {
   imagePath: string;
   imageUrl: string;
@@ -19,7 +21,9 @@ export async function cacheStoryImage(input: CacheStoryImageInput): Promise<Cach
   }
 
   const fetchImage = input.fetchImage ?? fetch;
-  const response = await fetchImage(input.imageUrl);
+  const response = await fetchImage(input.imageUrl, {
+    signal: AbortSignal.timeout(IMAGE_DOWNLOAD_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error(`Could not download article image: ${response.status}`);
   }

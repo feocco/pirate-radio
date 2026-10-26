@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vitest";
-import { detectNewArticles, parseArticleFeed, parsePirateFeed } from "../src/feed.js";
+import { detectNewArticles, fetchArticleFeed, parseArticleFeed, parsePirateFeed } from "../src/feed.js";
+import { expectTimeoutBudget } from "./support/timeouts.js";
 
 describe("Pirate Wires RSS monitor", () => {
   test("parses title, url, author, publish date, description, and guid", async () => {
@@ -91,5 +92,18 @@ describe("multi-source RSS monitor", () => {
     );
 
     expect(articles.map((article) => article.title)).toEqual(["Three Morning Takes"]);
+  });
+
+  test("a feed fetch past its 15s budget rejects with the timeout", async () => {
+    const timeout = expectTimeoutBudget(15_000, { globalFetch: true });
+    await expect(
+      fetchArticleFeed({
+        id: "hyperdimensional",
+        name: "Hyperdimensional",
+        type: "substack",
+        url: "https://www.hyperdimensional.co/feed",
+      }),
+    ).rejects.toMatchObject({ name: "TimeoutError" });
+    timeout.verify();
   });
 });

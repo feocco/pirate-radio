@@ -6,6 +6,8 @@ import {
   parsePirateRadioAction,
 } from "../src/notifications.js";
 import { PirateWiresAuthRequiredError } from "../src/browser.js";
+import { HomelabFunctionsNotifier } from "../src/notifier.js";
+import { expectTimeoutBudget } from "./support/timeouts.js";
 
 describe("Pirate Radio notifications", () => {
   const article = {
@@ -93,5 +95,15 @@ describe("Pirate Radio notifications", () => {
         uri: "http://maclabs-mac-mini.taildf3445.ts.net:5801/",
       },
     ]);
+  });
+
+  test("a notify post past its 10s budget rejects with the timeout", async () => {
+    const timeout = expectTimeoutBudget(10_000, { globalFetch: true });
+    await expect(
+      new HomelabFunctionsNotifier({ serviceUrl: "https://homelab.example.test", token: "test-token" }).send(
+        buildArticleNotification(article, "https://pirate-radio.example.test"),
+      ),
+    ).rejects.toMatchObject({ name: "TimeoutError" });
+    timeout.verify();
   });
 });

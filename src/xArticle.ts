@@ -1,6 +1,7 @@
 import type { Story, StoryContentBlock } from "./types.js";
 
 const X_API_BASE_URL = "https://api.x.com";
+const X_API_FETCH_TIMEOUT_MS = 15_000;
 const X_HOSTNAMES = new Set([
   "x.com",
   "www.x.com",
@@ -91,6 +92,7 @@ export async function extractXArticleFromUrl(
       authorization: `Bearer ${bearerToken}`,
       "user-agent": "pirate-radio/0.1",
     },
+    signal: AbortSignal.timeout(X_API_FETCH_TIMEOUT_MS),
   });
   if (response.status === 401 || response.status === 403) {
     throw new Error("X API authentication failed. Check X_API_BEARER_TOKEN.");

@@ -4,7 +4,12 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
 import { contentTypeForAsset } from "./assets.js";
-import { buildBacklogItems, queueBacklogConversion, queueBacklogUrlConversion } from "./backlog.js";
+import {
+  buildBacklogItems,
+  queueBacklogConversion,
+  queueBacklogUrlConversion,
+  type ProcessingSlugs,
+} from "./backlog.js";
 import { filterVoiceExcludedLibraryManifest } from "./articleFilters.js";
 import { fetchArticleFeeds, detectNewArticles } from "./feed.js";
 import { extractStoryFromUrl } from "./browser.js";
@@ -13,6 +18,7 @@ import { OidcAuthenticator, ForbiddenIdentityError, originAllowed, sendAuthentic
 import { validateIdentityConfig, type PirateRadioConfig } from "./config.js";
 import { PirateRadioDatabase, type PirateRadioStore } from "./database.js";
 import { HomeAssistantActionListener } from "./haActions.js";
+import type { SubmissionStatus } from "./identity.js";
 import { archiveLibraryItem, readLibraryManifest } from "./library.js";
 import {
   buildArticleFailureNotification,
@@ -38,6 +44,7 @@ import {
   handleArticleDecision,
   providerSynthesizer,
   refreshLibraryArticle,
+  type ArticleDecisionResult,
   validateCustomTextInput,
 } from "./workflow.js";
 
@@ -52,6 +59,22 @@ const SHIKWASA_VENDOR_ASSETS = new Map<string, { fileName: string; contentType: 
   ["/vendor/shikwasa/style.css", { fileName: "style.css", contentType: "text/css; charset=utf-8" }],
 ]);
 
+type DecisionOutcome =
+  | { ok: true; result: ArticleDecisionResult }
+  | { ok: false; error: unknown };
+
+type SubmissionWrite = [status: SubmissionStatus, update: { slug?: string; error?: string }];
+
+interface AcceptAttachment {
+  submissionId: string;
+  processing: Promise<void>;
+}
+
+interface AcceptFlight {
+  attached: AcceptAttachment[];
+  done: Promise<void>;
+}
+
 export interface PirateRadioServiceOptions {
   config: PirateRadioConfig;
   notifier?: Notifier;
@@ -63,7 +86,7 @@ export interface PirateRadioRequestHandlerOptions {
   config: PirateRadioConfig;
   getState?: () => Promise<PirateRadioState>;
   decide?: (slug: string, decision: PirateRadioDecision, submissionId?: string) => Promise<void>;
-  processingSlugs?: Set<string>;
+  processingSlugs?: ProcessingSlugs;
   sendNotification?: (notification: ArticleNotification) => Promise<void>;
   store: PirateRadioStore;
   authenticator: Authenticator;
@@ -75,7 +98,7 @@ export class PirateRadioService {
   private readonly notifier: Notifier;
   private readonly actionListener: HomeAssistantActionListener;
   private readonly failureNotifications = new Set<string>();
-  private readonly processingBacklogSlugs = new Set<string>();
+  private readonly acceptFlights = new Map<string, AcceptFlight>();
   private database?: PirateRadioDatabase;
   private authenticator?: Authenticator;
 
@@ -104,8 +127,8 @@ export class PirateRadioService {
     const requestHandler = createPirateRadioRequestHandler({
       config: this.options.config,
       getState: () => this.getState(),
-      decide: (slug, decision) => this.decide(slug, decision),
-      processingSlugs: this.processingBacklogSlugs,
+      decide: (slug, decision, submissionId) => this.decide(slug, decision, submissionId),
+      processingSlugs: this.acceptFlights,
       sendNotification: (notification) => this.sendNotification(notification),
       store: this.database,
       authenticator: this.authenticator,
@@ -126,7 +149,9 @@ export class PirateRadioService {
     void this.actionListener.start();
     await this.pollOnce();
     this.pollTimer = setInterval(() => {
-      void this.pollOnce();
+      void this.pollOnce().catch((error) => {
+        console.error("[pirate-radio] poll failed", error);
+      });
     }, this.options.config.pollIntervalMs);
   }
 
@@ -158,20 +183,78 @@ export class PirateRadioService {
   }
 
   async decide(slug: string, decision: PirateRadioDecision, submissionId?: string): Promise<void> {
-    const state = await this.getState();
-    const provider = createTtsProvider();
-    let effectiveSubmissionId = submissionId;
-    if (!effectiveSubmissionId && decision === "accept" && this.database) {
-      const article = findArticleBySlug(state, slug);
-      effectiveSubmissionId = (await this.database.createSubmission({
-        slug,
-        type: "automated",
-        title: article?.title,
-        sourceUrl: article?.url,
-      })).id;
-      await this.database.updateSubmission(effectiveSubmissionId, "processing");
+    if (decision === "accept") return this.accept(slug, submissionId);
+    const outcome = await this.runDecision(slug, decision);
+    if (submissionId) await this.writeSubmission(submissionId, ...terminalSubmissionWrite(slug, outcome));
+    await this.notifyOutcome(slug, outcome);
+  }
+
+  private accept(slug: string, submissionId?: string): Promise<void> {
+    let flight = this.acceptFlights.get(slug);
+    if (flight) {
+      if (submissionId) this.attach(flight.attached, slug, submissionId);
+      return flight.done;
     }
+
+    flight = { attached: [], done: Promise.resolve() };
+    this.acceptFlights.set(slug, flight);
+    if (submissionId) this.attach(flight.attached, slug, submissionId);
+    flight.done = this.convertOnce(slug, flight.attached, !submissionId);
+    return flight.done;
+  }
+
+  private attach(attached: AcceptAttachment[], slug: string, submissionId: string): void {
+    attached.push({ submissionId, processing: this.writeSubmission(submissionId, "processing", { slug }) });
+  }
+
+  private async convertOnce(
+    slug: string,
+    attached: AcceptAttachment[],
+    createAutomated: boolean,
+  ): Promise<void> {
+    let outcome: DecisionOutcome;
     try {
+      const automatedSubmissionId = createAutomated
+        ? await this.createAutomatedSubmission(slug)
+        : undefined;
+      if (automatedSubmissionId) this.attach(attached, slug, automatedSubmissionId);
+      await Promise.all(attached.map(({ processing }) => processing));
+      outcome = await this.runDecision(slug, "accept");
+    } catch (error) {
+      console.error(`[pirate-radio] decision accept for ${slug} failed`, error);
+      outcome = { ok: false, error };
+    }
+    const terminal = terminalSubmissionWrite(slug, outcome);
+    while (attached.length > 0) {
+      await Promise.all(
+        attached.splice(0).map(async ({ submissionId, processing }) => {
+          await processing;
+          await this.writeSubmission(submissionId, ...terminal);
+        }),
+      );
+    }
+    this.acceptFlights.delete(slug);
+    await this.notifyOutcome(slug, outcome);
+  }
+
+  private async createAutomatedSubmission(slug: string): Promise<string | undefined> {
+    if (!this.database) return undefined;
+    const article = findArticleBySlug(await this.getState(), slug);
+    const submission = await this.database.createSubmission({
+      slug,
+      type: "automated",
+      title: article?.title,
+      sourceUrl: article?.url,
+    });
+    return submission.id;
+  }
+
+  private async runDecision(
+    slug: string,
+    decision: PirateRadioDecision,
+  ): Promise<DecisionOutcome> {
+    try {
+      const state = await this.getState();
       const article = findArticleBySlug(state, slug);
       const result = await handleArticleDecision({
         decision,
@@ -184,29 +267,36 @@ export class PirateRadioService {
             apiKey: this.options.config.cursorApiKey,
             libraryDir: this.options.config.libraryDir,
           }),
-        synthesize: providerSynthesizer(provider),
+        synthesize: providerSynthesizer(createTtsProvider()),
         enableAlignment: this.options.config.enableAlignment,
-      });
-      await writeState(this.options.config.statePath, state);
-      if (effectiveSubmissionId && this.database) {
-        await this.database.updateSubmission(effectiveSubmissionId, result.status === "accepted" ? "succeeded" : "failed", {
-          slug: result.libraryItem?.slug ?? slug,
-          ...(result.status === "accepted" ? {} : { error: result.status }),
-        });
-      }
-      if (decision === "accept" && result.libraryItem) {
+      }).finally(() => writeState(this.options.config.statePath, state));
+      console.log(`[pirate-radio] decision ${decision} for ${slug}: ${result.status}`);
+      return { ok: true, result };
+    } catch (error) {
+      console.error(`[pirate-radio] decision ${decision} for ${slug} failed`, error);
+      return { ok: false, error };
+    }
+  }
+
+  private async writeSubmission(submissionId: string, ...write: SubmissionWrite): Promise<void> {
+    try {
+      await this.database?.updateSubmission(submissionId, ...write);
+    } catch (error) {
+      console.error(`[pirate-radio] submission ${submissionId} update failed`, error);
+    }
+  }
+
+  private async notifyOutcome(slug: string, outcome: DecisionOutcome): Promise<void> {
+    try {
+      if (!outcome.ok) {
+        await this.notifyArticleFailure(slug, outcome.error);
+      } else if (outcome.result.libraryItem) {
         await this.sendNotification(
-          buildArticleReadyNotification(result.libraryItem, this.options.config.publicBaseUrl),
+          buildArticleReadyNotification(outcome.result.libraryItem, this.options.config.publicBaseUrl),
         );
       }
-      console.log(`[pirate-radio] decision ${decision} for ${slug}: ${result.status}`);
     } catch (error) {
-      await writeState(this.options.config.statePath, state);
-      if (effectiveSubmissionId && this.database) {
-        await this.database.updateSubmission(effectiveSubmissionId, "failed", { error: error instanceof Error ? error.message : String(error) });
-      }
-      await this.notifyArticleFailure(slug, error);
-      console.error(`[pirate-radio] decision ${decision} for ${slug} failed`, error);
+      console.error(`[pirate-radio] notification preparation failed for ${slug}`, error);
     }
   }
 
@@ -401,14 +491,10 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
         statePath: options.config.statePath,
         processingSlugs,
         writeState,
-        startConversion: async (queuedSlug) => {
-          await options.store.updateSubmission(submission.id, "processing");
-          await decide(queuedSlug, "accept", submission.id);
-        },
+        startConversion: (queuedSlug) => decide(queuedSlug, "accept", submission.id),
       });
       if (result.status === "missing") await options.store.updateSubmission(submission.id, "failed", { error: "missing" });
       if (result.status === "converted") await options.store.updateSubmission(submission.id, "succeeded");
-      if (result.status === "processing") await options.store.updateSubmission(submission.id, "processing");
       json(response, result.status === "missing" ? 404 : 200, result);
       return;
     }
@@ -432,14 +518,10 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
           statePath: options.config.statePath,
           processingSlugs,
           writeState,
-          startConversion: async (queuedSlug) => {
-            await options.store.updateSubmission(submission.id, "processing", { slug: queuedSlug });
-            await decide(queuedSlug, "accept", submission.id);
-          },
+          startConversion: (queuedSlug) => decide(queuedSlug, "accept", submission.id),
         });
         if (!result.ok) await options.store.updateSubmission(submission.id, "failed", { error: result.error });
         if (result.ok && result.status === "converted") await options.store.updateSubmission(submission.id, "succeeded", { slug: result.slug });
-        if (result.ok && result.status === "processing") await options.store.updateSubmission(submission.id, "processing", { slug: result.slug });
         json(response, result.ok ? 200 : 400, result);
       } catch {
         json(response, 400, {
@@ -661,6 +743,16 @@ function findArticleBySlug(state: PirateRadioState, slug: string) {
     ...Object.values(state.skipped).map((record) => record.article),
   ];
   return articles.find((article) => (article.slug ?? basename(new URL(article.url).pathname)) === slug);
+}
+
+function terminalSubmissionWrite(slug: string, outcome: DecisionOutcome): SubmissionWrite {
+  if (!outcome.ok) {
+    return ["failed", { error: outcome.error instanceof Error ? outcome.error.message : String(outcome.error) }];
+  }
+  const update = { slug: outcome.result.libraryItem?.slug ?? slug };
+  return outcome.result.status === "accepted"
+    ? ["succeeded", update]
+    : ["failed", { ...update, error: outcome.result.status }];
 }
 
 function queueConvertSlug(pathname: string): string | undefined {

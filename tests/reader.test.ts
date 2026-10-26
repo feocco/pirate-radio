@@ -69,7 +69,6 @@ describe("reader page", () => {
     expect(html).toContain("/progress/");
     expect(html).toContain("saveProgress");
     expect(html).toContain("setTimeout(write, 2500)");
-    expect(html).toContain("saveProgress(track.slug, audio, true, true)");
     expect(html).toContain("typeof player.initMediaSession === \"function\"");
     expect(html).toContain("player.initMediaSession()");
     expect(html).toContain("audio.disableRemotePlayback = false");
@@ -106,7 +105,6 @@ describe("reader page", () => {
     expect(html).toContain("Newest conversion");
     expect(html).toContain("Article date");
     expect(html).toContain("item.imageUrl");
-    expect(html).toContain("mountMediaPlayer(playerHost, mediaPlayerTrack(item))");
     expect(html).toContain('content.className = "item-body"');
     expect(html).toContain('playerHost.className = "media-player compact"');
     expect(html).toContain('footer.className = "card-player-footer"');
@@ -114,7 +112,7 @@ describe("reader page", () => {
     expect(html).toContain("section.append(image, content, footer)");
     expect(html).toContain(".media-player.compact .shk-controls { width: 280px; margin: 0 auto; }");
     expect(html).toContain(".card-player-footer { grid-column: 1 / -1;");
-    expect(html).toContain("libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item)))");
+    expect(html).toContain('libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item), "library"))');
     expect(html).toContain("destroyLibraryPlayers()");
     expect(html).toContain("mounted.destroy()");
     expect(html).toContain('item.author ? "By " + item.author : ""');
@@ -144,7 +142,8 @@ describe("reader page", () => {
     expect(articleHtml).toContain('"title":"The Test Story"');
     expect(articleHtml).toContain('"sourceName":"Unknown Source"');
     expect(articleHtml).toContain('"audioUrl":"/audio/test-story.mp3"');
-    expect(libraryHtml).toContain("mediaPlayerTrack(item)");
+    expect(articleHtml).toMatch(/mountMediaPlayer\(\s*document\.getElementById\("article-player"\),\s*\{[^\n]*\},\s*"article",\s*\)/);
+    expect(libraryHtml).toContain('mediaPlayerTrack(item), "library")');
   });
 
   test("escapes hostile title and source metadata before Shikwasa innerHTML assignment", () => {
@@ -200,24 +199,11 @@ describe("reader page", () => {
     expect(html).toContain("mounted.destroy()");
     expect(html).toContain("libraryPlayers = []");
     expect(html).toContain("destroyLibraryPlayers();\n      root.textContent = \"\"");
-    expect(html).toContain("libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item)))");
-    expect(html).toContain("audio.addEventListener(\"play\", onPlay)");
+    expect(html).toContain('libraryPlayers.push(mountMediaPlayer(playerHost, mediaPlayerTrack(item), "library"))');
     expect(html).toContain("if (typeof player.initMediaSession === \"function\") player.initMediaSession()");
-    expect(html).toContain("window.removeEventListener(\"pagehide\", onPageHide)");
     expect(html).toContain("clearTimeout(progressTimers.get(track.slug))");
     expect(html).toContain("progressTimers.delete(track.slug)");
     expect(html).toContain("player.destroy()");
-  });
-
-  test("persists progress immediately on seeked and removes the seeked listener on destroy", () => {
-    const client = renderMediaPlayerClient();
-    expect(client).toContain("const onSeeked = () => saveProgress(track.slug, audio, true)");
-    expect(client).toContain('audio.addEventListener("seeked", onSeeked)');
-    expect(client).toContain('audio.removeEventListener("seeked", onSeeked)');
-    const html = renderReaderHtml();
-    expect(html).toContain("const onSeeked = () => saveProgress(track.slug, audio, true)");
-    expect(html).toContain('audio.addEventListener("seeked", onSeeked)');
-    expect(html).toContain('audio.removeEventListener("seeked", onSeeked)');
   });
 
   test("renders a compact account menu with central profile and native logout actions", () => {

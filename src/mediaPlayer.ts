@@ -78,15 +78,10 @@ export function renderMediaPlayerClient(userId?: string): string {
       return false;
     }
 
-    async function restoreProgress(slug, audio) {
-      try {
-        const response = await fetch("/progress/" + encodeURIComponent(slug), { cache: "no-store" });
-        if (response.ok) {
-          const progress = await response.json();
-          if (applySavedProgress(audio, progress.positionSeconds)) return;
-        }
-      } catch {}
-      applySavedProgress(audio, localStorage.getItem(keyFor(slug)));
+    function readSavedProgress(slug) {
+      return fetch("/progress/" + encodeURIComponent(slug), { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : undefined))
+        .then((progress) => progress?.positionSeconds, () => undefined);
     }
 
     let suppressProgressSaves = false;
@@ -115,17 +110,21 @@ export function renderMediaPlayerClient(userId?: string): string {
       }
     }
 
-    function mountMediaPlayer(container, track) {
+    function mountMediaPlayer(container, track, mode) {
+      if (mode !== "library" && mode !== "article") {
+        throw new Error("Unsupported media player mode");
+      }
       const { Player } = window.Shikwasa;
       const title = escapePlayerText(track.title);
       const artist = escapePlayerText(track.sourceName);
       const cover = trustedCoverUrl(track.coverUrl) ?? null;
+      const eager = mode === "article";
       const player = new Player({
         container,
         fixed: { type: "static" },
         themeColor: ${JSON.stringify(ACCENT)},
         download: true,
-        preload: "metadata",
+        preload: eager ? "metadata" : "none",
         speedOptions: [0.75, 1, 1.25, 1.5, 1.75, 2],
         audio: {
           title,
@@ -141,28 +140,54 @@ export function renderMediaPlayerClient(userId?: string): string {
         onPromptStart() { suppressProgressSaves = true; },
         onPromptEnd() { suppressProgressSaves = false; },
       });
-      const onPageHide = () => saveProgress(track.slug, audio, true);
-      const onPlay = () => {
-        if (typeof player.initMediaSession === "function") player.initMediaSession();
+      let state = "idle";
+      const listeners = [];
+      const listen = (target, type, handler, options) => {
+        target.addEventListener(type, handler, options);
+        listeners.push(() => target.removeEventListener(type, handler, options));
       };
-      const onSeeked = () => saveProgress(track.slug, audio, true);
-      audio.addEventListener("loadedmetadata", () => restoreProgress(track.slug, audio));
-      audio.addEventListener("timeupdate", () => saveProgress(track.slug, audio));
-      audio.addEventListener("pause", () => saveProgress(track.slug, audio, true));
-      audio.addEventListener("ended", () => saveProgress(track.slug, audio, true, true));
-      audio.addEventListener("seeked", onSeeked);
-      audio.addEventListener("play", onPlay);
-      window.addEventListener("pagehide", onPageHide);
+      const next = (type) => new Promise((resolve) => listen(audio, type, resolve, { once: true }));
+      const save = (immediate = false, ended = false) => {
+        if (state === "listening") saveProgress(track.slug, audio, immediate, ended);
+      };
+      async function restore() {
+        state = "restoring";
+        const saved = readSavedProgress(track.slug);
+        if (audio.readyState < 1) await next("loadedmetadata");
+        const position = await saved;
+        if (state !== "restoring") return;
+        if (applySavedProgress(audio, position) || applySavedProgress(audio, localStorage.getItem(keyFor(track.slug)))) await next("seeked");
+        if (state === "restoring") state = audio.paused ? "ready" : "listening";
+      }
+      listen(audio, "play", () => {
+        if (state === "idle") {
+          const muted = audio.muted;
+          audio.muted = true;
+          Promise.race([restore(), new Promise((resolve) => setTimeout(resolve, 3000))]).finally(() => { audio.muted = muted; });
+        } else if (state === "ready") {
+          state = "listening";
+        }
+        if (typeof player.initMediaSession === "function") player.initMediaSession();
+      });
+      listen(audio, "seeked", () => {
+        if (state === "ready") state = "listening";
+        save(true);
+      });
+      listen(audio, "timeupdate", () => save());
+      listen(audio, "pause", () => save(true));
+      listen(audio, "ended", () => save(true, true));
+      listen(window, "pagehide", () => save(true));
+      if (eager) restore();
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
       function destroy() {
-        saveProgress(track.slug, audio, true);
-        window.removeEventListener("pagehide", onPageHide);
-        audio.removeEventListener("play", onPlay);
-        audio.removeEventListener("seeked", onSeeked);
-        detachCast();
+        save(true);
+        state = "closed";
         clearTimeout(progressTimers.get(track.slug));
         progressTimers.delete(track.slug);
+        // Shikwasa's teardown fires pause and timeupdate at 0, so listeners come off first.
+        for (const remove of listeners) remove();
         player.destroy();
+        detachCast();
       }
       return { player, audio, destroy };
     }
