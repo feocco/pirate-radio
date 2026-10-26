@@ -9,6 +9,7 @@ import {
 import type { PirateArticle } from "../src/feed.js";
 import type { LibraryManifest } from "../src/library.js";
 import { createInitialState } from "../src/state.js";
+import { expectTimeoutBudget } from "./support/timeouts.js";
 
 const articles: PirateArticle[] = [
   {
@@ -435,5 +436,13 @@ describe("backlog", () => {
       status: "queued",
       slug: "example-com-test-story",
     });
+  });
+
+  test("a Substack redirect past its 10s budget returns the resolve error", async () => {
+    const timeout = expectTimeoutBudget(10_000, { globalFetch: true });
+    await expect(
+      validateArticleUrl("https://open.substack.com/pub/hyperdimensional/p/what-should-be-done"),
+    ).resolves.toEqual({ ok: false, error: "Could not resolve the Substack share URL." });
+    timeout.verify();
   });
 });

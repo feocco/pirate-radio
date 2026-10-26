@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterAll, describe, expect, test, vi } from "vitest";
+import { afterAll, describe, expect, onTestFinished, test, vi } from "vitest";
 import type { PirateRadioConfig } from "../src/config.js";
 import type { CreateSubmissionInput, PirateRadioDatabase } from "../src/database.js";
 import type { PirateArticle } from "../src/feed.js";
@@ -10,6 +10,7 @@ import type { Submission, SubmissionStatus } from "../src/identity.js";
 import type { ParsedPirateRadioAction } from "../src/notifications.js";
 import type { TtsRequest, TtsResult } from "../src/tts/index.js";
 import { FakeAuthenticator, MemoryStore } from "./support/fakes.js";
+import { timeoutError } from "./support/timeouts.js";
 
 const harness = vi.hoisted(() => ({
   servers: [] as Server[],
@@ -202,33 +203,7 @@ describe("runtime reliability reproduction", () => {
     harness.articles = [feedArticle, haArticle, failedAutomatedArticle];
     tempDir = await mkdtemp(join(tmpdir(), "pirate-reliability-repro-"));
     const store = new RuntimeStore();
-    const config: PirateRadioConfig = {
-      port: 0,
-      host: "127.0.0.1",
-      publicBaseUrl: "http://127.0.0.1",
-      libraryDir: join(tempDir, "library"),
-      statePath: join(tempDir, "state.json"),
-      pollIntervalMs: 60_000,
-      maxNotificationsPerPoll: 0,
-      feedUrl: "https://local.invalid/feed.xml",
-      feeds: [
-        {
-          id: "local",
-          name: "Local",
-          type: "substack",
-          url: "https://local.invalid/feed.xml",
-        },
-      ],
-      enableAlignment: false,
-      databaseUrl: "postgres://unused/repro",
-      oidcIssuer: "https://auth.invalid/application/o/pirate-radio/",
-      oidcClientId: "repro",
-      oidcClientSecret: "not-a-real-secret",
-      oidcScopes: "openid profile email groups",
-      memberGroup: "pirate-radio-users",
-      adminGroup: "pirate-radio-admins",
-      sessionLifetimeHours: 24,
-    };
+    const config = reliabilityConfig(tempDir);
     const intervalSpy = vi
       .spyOn(globalThis, "setInterval")
       .mockImplementation((() => ({ unref() {} })) as unknown as typeof setInterval);
@@ -383,7 +358,81 @@ describe("runtime reliability reproduction", () => {
       statuses: [],
     });
   });
+
+  test("a feed timeout during startup still rejects start", async () => {
+    const { service, intervals, fetchArticleFeeds } = await pollService();
+    fetchArticleFeeds.mockRejectedValueOnce(timeoutError());
+
+    await expect(service.start()).rejects.toMatchObject({ name: "TimeoutError" });
+    expect(intervals).not.toHaveBeenCalled();
+  });
+
+  test("a recurring poll timeout is logged instead of rejecting the interval", async () => {
+    const { service, intervals, fetchArticleFeeds } = await pollService();
+    const reason = timeoutError();
+    fetchArticleFeeds.mockResolvedValueOnce([]).mockRejectedValueOnce(reason);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    onTestFinished(() => errors.mockRestore());
+
+    await service.start();
+    (intervals.mock.calls[0]?.[0] as () => void)();
+
+    await vi.waitFor(() => {
+      expect(errors).toHaveBeenCalledWith("[pirate-radio] poll failed", reason);
+    });
+  });
 });
+
+async function pollService() {
+  const dir = await mkdtemp(join(tmpdir(), "pirate-poll-"));
+  const intervals = vi
+    .spyOn(globalThis, "setInterval")
+    .mockReturnValue({ unref() {} } as unknown as ReturnType<typeof setInterval>);
+  const { fetchArticleFeeds } = vi.mocked(await import("../src/feed.js"));
+  onTestFinished(async () => {
+    intervals.mockRestore();
+    fetchArticleFeeds.mockReset();
+    await rm(dir, { recursive: true, force: true });
+  });
+  const { PirateRadioService } = await import("../src/server.js");
+  const service = new PirateRadioService({
+    config: reliabilityConfig(dir),
+    database: new RuntimeStore() as unknown as PirateRadioDatabase,
+    authenticator: new FakeAuthenticator(),
+    notifier: { send: async () => {} },
+  });
+  return { service, intervals, fetchArticleFeeds };
+}
+
+function reliabilityConfig(dir: string): PirateRadioConfig {
+  return {
+    port: 0,
+    host: "127.0.0.1",
+    publicBaseUrl: "http://127.0.0.1",
+    libraryDir: join(dir, "library"),
+    statePath: join(dir, "state.json"),
+    pollIntervalMs: 60_000,
+    maxNotificationsPerPoll: 0,
+    feedUrl: "https://local.invalid/feed.xml",
+    feeds: [
+      {
+        id: "local",
+        name: "Local",
+        type: "substack",
+        url: "https://local.invalid/feed.xml",
+      },
+    ],
+    enableAlignment: false,
+    databaseUrl: "postgres://unused/repro",
+    oidcIssuer: "https://auth.invalid/application/o/pirate-radio/",
+    oidcClientId: "repro",
+    oidcClientSecret: "not-a-real-secret",
+    oidcScopes: "openid profile email groups",
+    memberGroup: "pirate-radio-users",
+    adminGroup: "pirate-radio-admins",
+    sessionLifetimeHours: 24,
+  };
+}
 
 async function post(
   url: string,

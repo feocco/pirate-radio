@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { extractXArticleFromUrl, parseXPostUrl } from "../src/xArticle.js";
+import { expectTimeoutBudget } from "./support/timeouts.js";
 
 const ARTICLE_URL = "https://x.com/demishassabis/status/2076957440109625718";
 const TITLE = "A Framework for Frontier AI and the Dawning of a New Age";
@@ -130,5 +131,13 @@ describe("X Article extraction", () => {
         fetchImpl: async () => new Response("", { status: 429 }),
       }),
     ).rejects.toThrow("X API rate limit exceeded");
+  });
+
+  test("an X API fetch past its 15s budget rejects with the timeout", async () => {
+    const timeout = expectTimeoutBudget(15_000);
+    await expect(
+      extractXArticleFromUrl(ARTICLE_URL, { bearerToken: "test-bearer-token", fetchImpl: timeout.fetch }),
+    ).rejects.toMatchObject({ name: "TimeoutError" });
+    timeout.verify();
   });
 });

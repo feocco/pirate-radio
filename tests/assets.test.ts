@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { cacheStoryImage, contentTypeForAsset } from "../src/assets.js";
+import { expectTimeoutBudget } from "./support/timeouts.js";
 
 let tempDir: string | undefined;
 
@@ -42,5 +43,19 @@ describe("article assets", () => {
     expect(contentTypeForAsset("hero.png")).toBe("image/png");
     expect(contentTypeForAsset("hero.jpg")).toBe("image/jpeg");
     expect(contentTypeForAsset("hero.webp")).toBe("image/webp");
+  });
+
+  test("an image download past its 30s budget rejects with the timeout", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-assets-"));
+    const timeout = expectTimeoutBudget(30_000);
+    await expect(
+      cacheStoryImage({
+        libraryDir: tempDir,
+        slug: "public-piece",
+        imageUrl: "https://cdn.example/hero.png",
+        fetchImage: timeout.fetch,
+      }),
+    ).rejects.toMatchObject({ name: "TimeoutError" });
+    timeout.verify();
   });
 });

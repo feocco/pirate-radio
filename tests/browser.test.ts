@@ -2,9 +2,11 @@ import { describe, expect, test } from "vitest";
 import {
   PirateWiresAuthRequiredError,
   canonicalPirateWiresUrl,
+  extractStoryFromUrl,
   profileDirFromEnv,
   validatePirateWiresAccess,
 } from "../src/browser.js";
+import { expectTimeoutBudget } from "./support/timeouts.js";
 
 describe("browser extraction URLs", () => {
   test("normalizes Substack feed URLs to Pirate Wires article pages", () => {
@@ -44,5 +46,13 @@ describe("browser extraction URLs", () => {
         profileDir: "/data/playwright-profile",
       }),
     ).not.toThrow();
+  });
+
+  test("a public article fetch past its 30s budget rejects with the timeout", async () => {
+    const timeout = expectTimeoutBudget(30_000, { globalFetch: true });
+    await expect(extractStoryFromUrl("https://www.hyperdimensional.co/p/public-piece")).rejects.toMatchObject({
+      name: "TimeoutError",
+    });
+    timeout.verify();
   });
 });
