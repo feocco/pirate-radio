@@ -43,7 +43,6 @@ export function renderMediaPlayerClient(userId?: string): string {
   return `
     const progressUserId = ${progressUserId};
     const progressTimers = new Map();
-    const progressRestoreTimeoutMs = 10_000;
     const keyFor = (slug) => "pirate-radio-position:" + progressUserId + ":" + slug;
 
     function escapePlayerText(value) {
@@ -80,10 +79,7 @@ export function renderMediaPlayerClient(userId?: string): string {
     }
 
     function readSavedProgress(slug) {
-      return fetch("/progress/" + encodeURIComponent(slug), {
-        cache: "no-store",
-        signal: AbortSignal.timeout(progressRestoreTimeoutMs),
-      })
+      return fetch("/progress/" + encodeURIComponent(slug), { cache: "no-store" })
         .then((response) => (response.ok ? response.json() : undefined))
         .then((progress) => progress?.positionSeconds, () => undefined);
     }
