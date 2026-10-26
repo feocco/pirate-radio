@@ -292,7 +292,6 @@ describe("runtime reliability reproduction", () => {
     await waitForSynthesis("Ha Single Flight", 1);
     expect(harness.maxActiveSyntheses).toBe(1);
 
-    // Holding the route after its manifest read makes it join while the terminal drain is blocked.
     store.createGate = gate();
     store.terminalGate = gate();
     const lateJoin = post(`${config.publicBaseUrl}/queue/convert/ha-single-flight`, config);
@@ -307,7 +306,6 @@ describe("runtime reliability reproduction", () => {
     await vi.waitFor(() => {
       expect(store.statuses("ha-single-flight", "automated")).toEqual(["succeeded"]);
     });
-    // A terminal write that skipped the row's processing write would land during this flush.
     await new Promise((resolve) => setImmediate(resolve));
     store.processingGate.release();
     await Promise.all(duplicateHaActions);

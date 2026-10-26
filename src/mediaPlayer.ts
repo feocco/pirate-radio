@@ -165,7 +165,6 @@ export function renderMediaPlayerClient(userId?: string): string {
       }
       listen(audio, "play", () => {
         if (state === "idle") {
-          // Muted until the resume seek lands, for at most 3 s, so a slow progress read cannot play the intro.
           const muted = audio.muted;
           audio.muted = true;
           Promise.race([restore(), new Promise((resolve) => setTimeout(resolve, 3000))]).finally(() => { audio.muted = muted; });
