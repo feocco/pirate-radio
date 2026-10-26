@@ -275,6 +275,8 @@ function titleFromSlug(slug: string): string {
     .join(" ") || "Article";
 }
 
+const SUBSTACK_REDIRECT_TIMEOUT_MS = 10_000;
+
 async function resolveOpenSubstackUrl(
   url: string,
   resolver?: (url: string) => Promise<string>,
@@ -282,7 +284,10 @@ async function resolveOpenSubstackUrl(
   try {
     const resolved = resolver
       ? await resolver(url)
-      : (await fetch(url, { redirect: "follow" })).url;
+      : (await fetch(url, {
+          redirect: "follow",
+          signal: AbortSignal.timeout(SUBSTACK_REDIRECT_TIMEOUT_MS),
+        })).url;
     return { ok: true, url: resolved };
   } catch {
     return { ok: false, error: "Could not resolve the Substack share URL." };

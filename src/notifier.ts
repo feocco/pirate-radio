@@ -1,5 +1,7 @@
 import type { ArticleNotification } from "./notifications.js";
 
+const NOTIFY_POST_TIMEOUT_MS = 10_000;
+
 export interface Notifier {
   send(notification: ArticleNotification): Promise<void>;
 }
@@ -25,6 +27,7 @@ export class HomelabFunctionsNotifier implements Notifier {
         "content-type": "application/json",
       },
       body: JSON.stringify(notification),
+      signal: AbortSignal.timeout(NOTIFY_POST_TIMEOUT_MS),
     });
 
     if (!response.ok) {

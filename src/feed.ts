@@ -66,12 +66,15 @@ export async function fetchArticleFeeds(feeds: ArticleFeedConfig[] = DEFAULT_FEE
     .sort((left, right) => Date.parse(right.publishedAt) - Date.parse(left.publishedAt));
 }
 
+const FEED_FETCH_TIMEOUT_MS = 15_000;
+
 export async function fetchArticleFeed(feed: ArticleFeedConfig): Promise<PirateArticle[]> {
   const response = await fetch(feed.url, {
     headers: {
       accept: "application/rss+xml, application/xml, text/xml",
       "user-agent": "pirate-radio/0.1",
     },
+    signal: AbortSignal.timeout(FEED_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new Error(`Failed to fetch ${feed.name} feed: ${response.status} ${response.statusText}`);

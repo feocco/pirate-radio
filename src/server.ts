@@ -149,7 +149,9 @@ export class PirateRadioService {
     void this.actionListener.start();
     await this.pollOnce();
     this.pollTimer = setInterval(() => {
-      void this.pollOnce();
+      void this.pollOnce().catch((error) => {
+        console.error("[pirate-radio] poll failed", error);
+      });
     }, this.options.config.pollIntervalMs);
   }
 
