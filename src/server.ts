@@ -191,15 +191,15 @@ export class PirateRadioService {
 
   private accept(slug: string, submissionId?: string): Promise<void> {
     let flight = this.acceptFlights.get(slug);
-    if (!flight) {
-      const attached: AcceptAttachment[] = [];
-      const createAutomated = !submissionId;
-      // Deferred so the flight is registered before any conversion step can read or close it.
-      const done = Promise.resolve().then(() => this.convertOnce(slug, attached, createAutomated));
-      flight = { attached, done };
-      this.acceptFlights.set(slug, flight);
+    if (flight) {
+      if (submissionId) this.attach(flight.attached, slug, submissionId);
+      return flight.done;
     }
+
+    flight = { attached: [], done: Promise.resolve() };
+    this.acceptFlights.set(slug, flight);
     if (submissionId) this.attach(flight.attached, slug, submissionId);
+    flight.done = this.convertOnce(slug, flight.attached, !submissionId);
     return flight.done;
   }
 
@@ -233,8 +233,6 @@ export class PirateRadioService {
         }),
       );
     }
-    // Joiners attach synchronously, so closing in the same tick as the empty
-    // drain leaves no attached row without its terminal write.
     this.acceptFlights.delete(slug);
     await this.notifyOutcome(slug, outcome);
   }
