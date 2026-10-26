@@ -7,7 +7,9 @@ small browser view. Except for `GET /health`, `GET /auth/login`, and
 ## Identity
 
 - `GET /auth/login?returnTo=/path` starts Authentik OIDC with PKCE.
-- `GET /auth/callback` consumes the one-time browser-bound transaction.
+- `GET /auth/callback` consumes the one-time browser-bound transaction. In-flight
+  or just-completed retries for the same browser-bound state reuse that result
+  instead of failing as a replay.
 - `GET /auth/me` returns the current application-user and role snapshot.
 - `POST /auth/logout` revokes the session, clears the cookie, and redirects
   through Authentik's OIDC end-session endpoint to end the SSO session.

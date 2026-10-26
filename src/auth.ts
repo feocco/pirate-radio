@@ -73,7 +73,37 @@ class OpenIdClientProtocol implements OidcProtocol {
   }
 }
 
+class OidcCallbackGate {
+  private readonly inFlight = new Map<string, Promise<CallbackResult>>();
+  private readonly completed = new Map<string, { result: CallbackResult; expiresAt: number }>();
+
+  static key(state: string, bindingHash: string): string {
+    return `${state}:${bindingHash}`;
+  }
+
+  async run(key: string, work: () => Promise<CallbackResult>): Promise<CallbackResult> {
+    const cached = this.completed.get(key);
+    if (cached) {
+      if (cached.expiresAt > Date.now()) return cached.result;
+      this.completed.delete(key);
+    }
+    const existing = this.inFlight.get(key);
+    if (existing) return existing;
+    const pending = work();
+    this.inFlight.set(key, pending);
+    try {
+      const result = await pending;
+      this.completed.set(key, { result, expiresAt: Date.now() + 10 * 60 * 1000 });
+      return result;
+    } finally {
+      this.inFlight.delete(key);
+    }
+  }
+}
+
 export class OidcAuthenticator implements Authenticator {
+  private readonly callbackGate = new OidcCallbackGate();
+
   constructor(
     private readonly config: PirateRadioConfig,
     private readonly store: PirateRadioStore,
@@ -122,26 +152,40 @@ export class OidcAuthenticator implements Authenticator {
     const state = requestUrl.searchParams.get("state");
     const binding = parseCookies(cookieHeader)[OIDC_COOKIE];
     if (!state || !binding) throw new Error("Missing OIDC transaction state.");
-    const transaction = await this.store.consumeOidcTransaction(state, hashToken(binding));
+    const bindingHash = hashToken(binding);
+    return this.callbackGate.run(OidcCallbackGate.key(state, bindingHash), () =>
+      this.settleCallback(requestUrl, state, bindingHash),
+    );
+  }
+
+  private async settleCallback(requestUrl: URL, state: string, bindingHash: string): Promise<CallbackResult> {
+    const transaction = await this.store.consumeOidcTransaction(state, bindingHash);
     if (!transaction) throw new Error("OIDC transaction is expired, invalid, or already used.");
-    const claims = await this.protocol.exchange(requestUrl, {
-      codeVerifier: transaction.codeVerifier,
-      state: transaction.state,
-      nonce: transaction.nonce,
-    });
-    if (!claims?.sub || !claims.iss) throw new Error("OIDC response did not include issuer and subject.");
-    const identity = identityFromClaims(claims as Record<string, unknown>);
-    if (!identity.groups.includes(this.config.memberGroup)) throw new ForbiddenIdentityError();
-    const user = await this.store.upsertUser(identity);
-    const sessionToken = randomToken();
-    const lifetimeSeconds = Math.floor(this.config.sessionLifetimeHours * 60 * 60);
-    await this.store.createSession(hashToken(sessionToken), user.id, new Date(Date.now() + lifetimeSeconds * 1000));
-    return {
-      sessionCookie: cookie(SESSION_COOKIE, sessionToken, lifetimeSeconds),
-      transactionCookie: clearCookie(OIDC_COOKIE),
-      returnTo: transaction.returnTo,
-      user,
-    };
+    try {
+      const claims = await this.protocol.exchange(requestUrl, {
+        codeVerifier: transaction.codeVerifier,
+        state: transaction.state,
+        nonce: transaction.nonce,
+      });
+      if (!claims?.sub || !claims.iss) throw new Error("OIDC response did not include issuer and subject.");
+      const identity = identityFromClaims(claims as Record<string, unknown>);
+      if (!identity.groups.includes(this.config.memberGroup)) throw new ForbiddenIdentityError();
+      const user = await this.store.upsertUser(identity);
+      const sessionToken = randomToken();
+      const lifetimeSeconds = Math.floor(this.config.sessionLifetimeHours * 60 * 60);
+      await this.store.createSession(hashToken(sessionToken), user.id, new Date(Date.now() + lifetimeSeconds * 1000));
+      return {
+        sessionCookie: cookie(SESSION_COOKIE, sessionToken, lifetimeSeconds),
+        transactionCookie: clearCookie(OIDC_COOKIE),
+        returnTo: transaction.returnTo,
+        user,
+      };
+    } catch (error) {
+      if (!(error instanceof ForbiddenIdentityError)) {
+        await this.store.createOidcTransaction(transaction).catch(() => {});
+      }
+      throw error;
+    }
   }
 
   async authenticate(cookieHeader: string | undefined): Promise<AuthenticatedRequest | undefined> {
