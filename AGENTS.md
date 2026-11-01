@@ -26,6 +26,26 @@ variable that authenticates callers. The full contract is in
   `tests/qa/reader.spec.ts` fails if the server starts accepting a bearer
   token. Change it only together with that reviewed design.
 
+## Work policy (Joe, authoritative)
+
+This policy is Joe's and overrides conflicting skill or tool defaults,
+including pstack defaults.
+
+- All Pirate Radio work runs through the Pirate Radio Cursor Project.
+- Keep the pstack budget reasonable. Apply the pstack practices
+  (root cause, proof, blast radius, how/why, correct, unslop, TDD where
+  useful) in proportion to the change.
+- Use exactly one model per task:
+  - `claude-opus-5-5-high` for design, review, and judgment work.
+  - `grok-4.7-high-fast` for implementation.
+  - `gpt-5.6-sol-high` is optional, and only as a single second reviewer on
+    risky changes.
+- Do not use `arena`, multiple candidate implementations, or three-model
+  judging panels.
+- Bug fixes are pre-approved to open pull requests.
+- No one merges a pull request or deploys without Joe's explicit approval,
+  relayed by Engineer Bot. Opening a PR is not approval to merge it.
+
 ## Scope
 
 This repo owns the public application code for Pirate Radio. Keep private
@@ -92,6 +112,8 @@ registration separately.
 ### Deploy path (GHCR and homelab-config)
 
 Agents do not deploy. Describe the rollout in the PR and leave it to Joe.
+Merging and deploying both need Joe's explicit approval relayed by Engineer
+Bot (see "Work policy" above).
 
 1. A merge to `main` runs `.github/workflows/container.yml`. The Dockerfile
    build stage runs `npm test` and `npm run build`. The workflow then pushes
