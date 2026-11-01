@@ -107,7 +107,38 @@ registration separately.
   real `XAI_API_KEY` as a runtime secret in `homelab-config`. Any CI that runs
   real TTS needs it as a repository secret. `npm test` and `npm run qa`
   require neither.
-- Results and traces go to `output/qa/test-results/` (gitignored).
+- Results go to `output/qa/test-results/` (gitignored). Every run saves a
+  full-page `reader-article.png`. `PIRATE_RADIO_QA_EVIDENCE=1 npm run qa`
+  also records a trace and a video for each test, slowed by `slowMo` so they
+  are watchable. The global teardown (`tests/qa/redact-traces.ts`) redacts
+  cookies, credential headers, and OIDC codes in every trace, and fails the
+  run if any remain.
+
+### PR checklist
+
+- Run the Verification checks and put the exact results in the PR body.
+- Add visual evidence wherever the change is visible or end to end:
+  Playwright screenshots and/or a short recording, embedded in or linked from
+  the PR body. `PIRATE_RADIO_QA_EVIDENCE=1 npm run qa` produces a reader
+  screenshot, a trace, and a video. Cloud agents copy the files they use into
+  `/opt/cursor/artifacts/` and reference them from the PR body.
+- Keep evidence minimal. Upload the smallest set from a successful run that
+  shows the change working. Leave out failing runs, setup steps, and
+  duplicates.
+- Evidence must contain no secrets or private data. Never commit generated
+  evidence or runtime artifacts (`output/`, test results, traces, videos,
+  screenshots).
+- Privacy (Joe, authoritative):
+  - Screenshots and recordings come only from the seeded local dev
+    environment (the `npm run dev` seed or the `npm run qa` fixtures), using
+    fake data.
+  - Never capture or expose real API keys, session cookies, browser devtools,
+    tailnet IPs or hostnames, personal emails, or other production or private
+    identifiers.
+  - Audit every artifact and PR-body embed against this before uploading.
+    Regenerate or omit anything that violates it. Traces record HTTP headers
+    and API responses. The teardown redacts credentials, but review the trace
+    anyway, and upload only the traces the PR needs.
 
 ### Deploy path (GHCR and homelab-config)
 

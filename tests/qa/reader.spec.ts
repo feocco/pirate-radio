@@ -79,6 +79,7 @@ test("a submitted fixture URL is processed and the reader renders title, text, a
   expect(pageErrors).toEqual([]);
 
   const duration = await player.locator(".shk-time_duration").textContent();
+  await page.screenshot({ path: test.info().outputPath("reader-article.png"), fullPage: true });
   console.log(
     `[qa] PASS slug=${slug} submission=${submission?.status} title="${TITLE}" ` +
       `player.duration=${duration} audio=${(await audioResponse).status()} ` +
@@ -94,14 +95,14 @@ test("bots authenticate only with an OIDC browser-session cookie, never a bearer
   const bot = await playwright.request.newContext({ baseURL: stack.baseUrl, maxRedirects: 0 });
   try {
     expect((await bot.get("/health")).status()).toBe(200);
-    const botCredentials: Record<string, string>[] = [
-      {},
-      { authorization: `Bearer ${UNSUPPORTED_SERVICE_TOKEN}` },
-      { "x-api-key": UNSUPPORTED_SERVICE_TOKEN },
+    const botCredentials: Array<[label: string, headers: Record<string, string>]> = [
+      ["no credential", {}],
+      ["bearer service token", { authorization: `Bearer ${UNSUPPORTED_SERVICE_TOKEN}` }],
+      ["x-api-key service token", { "x-api-key": UNSUPPORTED_SERVICE_TOKEN }],
     ];
-    for (const headers of botCredentials) {
+    for (const [label, headers] of botCredentials) {
       const rejected = await bot.get("/library.json", { headers });
-      expect(rejected.status(), JSON.stringify(headers)).toBe(401);
+      expect(rejected.status(), label).toBe(401);
       expect(await rejected.json()).toMatchObject({ error: "authentication_required" });
     }
 
