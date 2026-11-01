@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { readLibraryManifest } from "../src/library.js";
 import {
   createCustomTextAudio,
   createInitialState,
@@ -119,6 +120,90 @@ describe("approval workflow", () => {
     expect(result.status).toBe("accepted");
     expect(state.skipped[article.id]).toBeUndefined();
     expect(state.approved[article.id]).toBeDefined();
+  });
+
+  test("a skip during speech generation keeps the article skipped and unpublished", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-workflow-"));
+    const state = createInitialState();
+    state.pending["inside-microns-attempts"] = article;
+    const synthesize = vi.fn(async ({ outputPath }: { outputPath: string }) => {
+      await handleArticleDecision({
+        decision: "skip",
+        slug: "inside-microns-attempts",
+        state,
+        libraryDir: tempDir!,
+        readArticle: vi.fn(),
+        synthesize: vi.fn(),
+      });
+      await mkdir(dirname(outputPath), { recursive: true });
+      await writeFile(outputPath, Buffer.from("mock mp3"));
+      return { provider: "mock" as const, outputPath, estimatedCostUsd: 0.01 };
+    });
+
+    const result = await handleArticleDecision({
+      decision: "accept",
+      slug: "inside-microns-attempts",
+      state,
+      libraryDir: tempDir,
+      readArticle: vi.fn(async () => ({
+        sourceUrl: article.url,
+        title: article.title,
+        text: "Body text.",
+        wordCount: 2,
+        characterCount: 10,
+        extractedAt: "2026-06-23T01:00:00.000Z",
+      })),
+      synthesize,
+    });
+
+    expect(result.status).toBe("skipped");
+    expect(state.approved[article.id]).toBeUndefined();
+    expect(state.skipped[article.id]).toBeDefined();
+    expect(state.pending["inside-microns-attempts"]).toBeUndefined();
+    expect((await readLibraryManifest(tempDir)).items).toEqual([]);
+  });
+
+  test("a later skip replaces an approval record", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-workflow-"));
+    const state = createInitialState();
+    state.pending["inside-microns-attempts"] = article;
+    await handleArticleDecision({
+      decision: "accept",
+      slug: "inside-microns-attempts",
+      state,
+      libraryDir: tempDir,
+      readArticle: vi.fn(async () => ({
+        sourceUrl: article.url,
+        title: article.title,
+        text: "Body text.",
+        wordCount: 2,
+        characterCount: 10,
+        extractedAt: "2026-06-23T01:00:00.000Z",
+      })),
+      synthesize: vi.fn(async ({ outputPath }) => {
+        await mkdir(dirname(outputPath), { recursive: true });
+        await writeFile(outputPath, Buffer.from("mock mp3"));
+        return { provider: "mock", outputPath, estimatedCostUsd: 0.01 };
+      }),
+    });
+
+    const synthesize = vi.fn();
+    const result = await handleArticleDecision({
+      decision: "skip",
+      slug: "inside-microns-attempts",
+      state,
+      libraryDir: tempDir,
+      readArticle: vi.fn(),
+      synthesize,
+    });
+
+    expect(result.status).toBe("skipped");
+    expect(synthesize).not.toHaveBeenCalled();
+    expect(state.approved[article.id]).toBeUndefined();
+    expect(state.skipped[article.id]).toBeDefined();
+    expect((await readLibraryManifest(tempDir)).items.map((item) => item.slug)).toEqual([
+      "inside-microns-attempts",
+    ]);
   });
 
   test("failed accept preserves the pending article for retry", async () => {

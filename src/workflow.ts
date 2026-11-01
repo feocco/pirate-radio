@@ -76,6 +76,7 @@ export async function handleArticleDecision(
   const article =
     input.state.pending[input.slug] ??
     findDecisionRecord(input.state.skipped, input.slug)?.article ??
+    findDecisionRecord(input.state.approved, input.slug)?.article ??
     findSeenArticle(input.state, input.slug);
   if (!article) {
     return { status: "missing" };
@@ -84,14 +85,17 @@ export async function handleArticleDecision(
   const decidedAt = new Date().toISOString();
 
   if (input.decision === "skip") {
-    delete input.state.pending[input.slug];
-    input.state.skipped[article.id] = { article, decidedAt };
+    commitArticleDecision(input.state, article, input.slug, "skip", decidedAt);
     return { status: "skipped", article };
   }
 
-  delete input.state.skipped[article.id];
+  const priorSkip = input.state.skipped[article.id];
+  const skippedDuringAccept = (): ArticleDecisionResult | undefined =>
+    skipArrivedSince(input.state, article.id, priorSkip) ? { status: "skipped", article } : undefined;
 
   const story = await input.readArticle(article.url);
+  const skippedAfterRead = skippedDuringAccept();
+  if (skippedAfterRead) return skippedAfterRead;
   story.author = normalizedAuthor(story.author) ?? normalizedAuthor(article.author);
   const slug = librarySlugForArticle(article, story);
   const textDir = join(input.libraryDir, "text");
@@ -112,6 +116,8 @@ export async function handleArticleDecision(
 
   await writeFile(textPath, `${story.title}\n\n${story.text}\n`, "utf8");
   await writeFile(jsonPath, `${JSON.stringify(story, null, 2)}\n`, "utf8");
+  const skippedBeforeSpeech = skippedDuringAccept();
+  if (skippedBeforeSpeech) return skippedBeforeSpeech;
   const ttsResult = await input.synthesize({
     title: story.title,
     text: story.text,
@@ -119,9 +125,13 @@ export async function handleArticleDecision(
     allowOverBudget: false,
     ...(input.enableAlignment ? { includeTimestamps: true } : {}),
   });
+  const skippedAfterSpeech = skippedDuringAccept();
+  if (skippedAfterSpeech) return skippedAfterSpeech;
   const alignment = input.enableAlignment
     ? await tryWriteAlignment(input.libraryDir, slug, ttsResult)
     : undefined;
+  const skippedAfterAlignment = skippedDuringAccept();
+  if (skippedAfterAlignment) return skippedAfterAlignment;
 
   const manifest = await appendLibraryItem(input.libraryDir, {
     slug,
@@ -148,8 +158,9 @@ export async function handleArticleDecision(
     characterCount: story.characterCount,
   });
 
-  input.state.approved[article.id] = { article, decidedAt };
-  delete input.state.pending[input.slug];
+  const skippedAfterPublish = skippedDuringAccept();
+  if (skippedAfterPublish) return skippedAfterPublish;
+  commitArticleDecision(input.state, article, input.slug, "accept", decidedAt);
   return { status: "accepted", article, libraryItem: manifest.items[0] };
 }
 
@@ -308,6 +319,30 @@ export async function refreshLibraryArticle(
     status: "refreshed",
     libraryItem: nextManifest.items.find((candidate) => candidate.slug === item.slug),
   };
+}
+
+function commitArticleDecision(
+  state: PirateRadioState,
+  article: PirateArticle,
+  slug: string,
+  decision: "accept" | "skip",
+  decidedAt: string,
+): void {
+  delete state.pending[slug];
+  delete state.approved[article.id];
+  delete state.skipped[article.id];
+  const record = { article, decidedAt };
+  if (decision === "skip") state.skipped[article.id] = record;
+  else state.approved[article.id] = record;
+}
+
+function skipArrivedSince(
+  state: PirateRadioState,
+  articleId: string,
+  prior: PirateRadioState["skipped"][string] | undefined,
+): boolean {
+  const current = state.skipped[articleId];
+  return current !== undefined && current !== prior;
 }
 
 function normalizedAuthor(author: string | undefined): string | undefined {
