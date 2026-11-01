@@ -10,6 +10,8 @@
   "scripts": {
     "build": "tsc",
     "cli": "tsx src/cli.ts",
+    "dev": "bash scripts/dev/up.sh",
+    "qa": "npm run build && playwright test -c tests/qa",
     "start": "node dist/src/cli.js serve",
     "test": "vitest run",
     "test:watch": "vitest"

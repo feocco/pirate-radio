@@ -23,11 +23,14 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-# Ensure the app role and database exist (idempotent).
+# Ensure the app role and databases exist (idempotent). `pirate_radio_qa` backs
+# `npm run qa` so the QA harness never writes into the seeded dev database.
 sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='pirate_radio'" | grep -q 1 \
   || sudo -u postgres psql -c "CREATE ROLE pirate_radio LOGIN PASSWORD 'pirate_radio'"
-sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='pirate_radio'" | grep -q 1 \
-  || sudo -u postgres createdb -O pirate_radio pirate_radio
+for database in pirate_radio pirate_radio_qa; do
+  sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='$database'" | grep -q 1 \
+    || sudo -u postgres createdb -O pirate_radio "$database"
+done
 
 # Seed realistic data. Best-effort: needs XAI_API_KEY (a run-time secret) for
 # audio, and reaches public feeds only when they are on the egress allowlist.

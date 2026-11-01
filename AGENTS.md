@@ -1,5 +1,53 @@
 # Pirate Radio Agent Notes
 
+## Authentication for bots
+
+There is no machine-to-machine auth. The server accepts no API token, bearer
+token, API key, or service-account credential, and reads no environment
+variable that authenticates callers. The full contract is in
+[README.md](README.md#authentication-for-bots). The short version:
+
+- Endpoint: `https://reader.home.feocco.com`, reached from a device on the
+  tailnet. `reader.feocco.com` does not exist (NXDOMAIN). The direct macmini
+  port is bound to the host's loopback only and is not reachable from the
+  tailnet.
+- Credential: only the `pirate_radio_session` cookie that the Authentik OIDC
+  browser login creates (authorization code + PKCE, `pirate-radio-users`
+  group). Writes also need `Origin: https://reader.home.feocco.com`. A bot can
+  only reuse a session from a real browser login as an Authentik account. That
+  is a user session, not a reviewed bot credential.
+- Env contract: none. `XAI_API_KEY`, `X_API_BEARER_TOKEN`,
+  `HA_LONG_LIVED_TOKEN`, `HOMELAB_FUNCTIONS_TOKEN`, and `CURSOR_API_KEY` are
+  outbound credentials, not caller auth. `PIRATE_RADIO_SERVICE_TOKEN` and
+  similar names are unsupported until a reviewed design lands. No code reads
+  them.
+- Do not add bearer, API-key, or service-token auth, or document it as
+  available, without a reviewed design. The bot-auth test in
+  `tests/qa/reader.spec.ts` fails if the server starts accepting a bearer
+  token. Change it only together with that reviewed design.
+
+## Work policy (Joe, authoritative)
+
+This policy is Joe's and overrides conflicting skill or tool defaults,
+including pstack defaults.
+
+- All Pirate Radio work runs through the Pirate Radio Cursor Project.
+- Keep the pstack budget reasonable. Apply the pstack practices
+  (root cause, proof, blast radius, how/why, correct, unslop, TDD where
+  useful) in proportion to the change.
+- Use exactly one model per task:
+  - `claude-opus-5-5-high` for design, review, and judgment work.
+  - `grok-4.7-high-fast` for implementation.
+  - `gpt-5.6-sol-high` is optional, and only as a single second reviewer on
+    risky changes.
+- Do not use `arena`, multiple candidate implementations, or three-model
+  judging panels.
+- Bug fixes are pre-approved to open pull requests.
+- No one merges a pull request or deploys without Joe's explicit approval,
+  relayed by Engineer Bot. Opening a PR is not approval to merge it.
+
+## Scope
+
 This repo owns the public application code for Pirate Radio. Keep private
 runtime configuration in `homelab-config`.
 
@@ -23,11 +71,123 @@ Run the narrow checks before publishing changes:
 ```bash
 npm test
 npm run build
+npm run qa
 docker build -t pirate-radio:local .
 ```
 
 For deployment work, validate the matching private `homelab-config`
 registration separately.
+
+### Local dev boot and reader QA
+
+- `npm run dev` (`scripts/dev/up.sh`) boots the full stack in one command. It
+  rebuilds `dist/`, runs `start.sh` (Postgres, the `pirate_radio` and
+  `pirate_radio_qa` databases, and the fixture seed of 3 articles with audio),
+  starts the local OIDC issuer, then runs `serve` in the foreground at
+  `http://localhost:8123`. Sign-in auto-approves `demo.reader`. If the
+  environment's `serve` terminal already answers on that port, it exits and
+  says so. Set `SERVICE_PORT` and `LOCAL_OIDC_PORT` to boot a second stack.
+  Always rebuild before trusting a running stack: `start.sh` and `serve.sh`
+  run whatever `dist/` holds.
+- `npm run qa` (`tests/qa/`, Playwright, headless Chromium) builds, then boots
+  its own hermetic stack: the real built `serve` on free ports, a temporary
+  library, the `pirate_radio_qa` database, and a local OIDC issuer as
+  `qa.reader`. It submits a fixture Substack URL through `/queue`, waits for
+  the submission to succeed, and asserts the reader renders the title, the
+  article text with comment and subscribe blocks removed, and the shared
+  `src/mediaPlayer.ts` player with a loaded duration. A second test pins the
+  bot-auth contract above.
+- QA never calls real xAI or any external host. `tests/qa/network-stub.mjs` is
+  a dev-only `node --import` preload. It refuses to load unless
+  `PIRATE_RADIO_DEV_STACK=1` and `NODE_ENV` is not `production`. It routes the
+  fixture origin and `https://api.x.ai` to loopback mocks and rejects every
+  other non-loopback request. `serve` gets a scrubbed environment, with
+  `XAI_API_KEY=qa-fake-xai-key`, and the mock asserts that exact bearer value,
+  so a real key is never needed or forwarded. Production TTS still needs the
+  real `XAI_API_KEY` as a runtime secret in `homelab-config`. Any CI that runs
+  real TTS needs it as a repository secret. `npm test` and `npm run qa`
+  require neither.
+- Results go to `output/qa/test-results/` (gitignored). Every run saves a
+  full-page `reader-article.png`. `PIRATE_RADIO_QA_EVIDENCE=1 npm run qa`
+  also records a trace and a video for each test, slowed by `slowMo` so they
+  are watchable. The global teardown (`tests/qa/redact-traces.ts`) redacts
+  cookies, credential headers, and OIDC codes in every trace, and fails the
+  run if any remain.
+
+### PR checklist
+
+- Run the Verification checks and put the exact results in the PR body.
+- Add visual evidence wherever the change is visible or end to end:
+  Playwright screenshots and/or a short recording, embedded in or linked from
+  the PR body. `PIRATE_RADIO_QA_EVIDENCE=1 npm run qa` produces a reader
+  screenshot, a trace, and a video. Cloud agents copy the files they use into
+  `/opt/cursor/artifacts/` and reference them from the PR body.
+- Keep evidence minimal. Upload the smallest set from a successful run that
+  shows the change working. Leave out failing runs, setup steps, and
+  duplicates.
+- Evidence must contain no secrets or private data. Never commit generated
+  evidence or runtime artifacts (`output/`, test results, traces, videos,
+  screenshots).
+- Privacy (Joe, authoritative):
+  - Screenshots and recordings come only from the seeded local dev
+    environment (the `npm run dev` seed or the `npm run qa` fixtures), using
+    fake data.
+  - Never capture or expose real API keys, session cookies, browser devtools,
+    tailnet IPs or hostnames, personal emails, or other production or private
+    identifiers.
+  - Audit every artifact and PR-body embed against this before uploading.
+    Regenerate or omit anything that violates it. Traces record HTTP headers
+    and API responses. The teardown redacts credentials, but review the trace
+    anyway, and upload only the traces the PR needs.
+
+### Deploy path (GHCR and homelab-config)
+
+Agents do not deploy. Describe the rollout in the PR and leave it to Joe.
+Merging and deploying both need Joe's explicit approval relayed by Engineer
+Bot (see "Work policy" above).
+
+1. A merge to `main` runs `.github/workflows/container.yml`. The Dockerfile
+   build stage runs `npm test` and `npm run build`. The workflow then pushes
+   `ghcr.io/feocco/pirate-radio:latest` and `:sha-<short>`. Pull requests do
+   not publish images. A manual `workflow_dispatch` from another ref publishes
+   only a `sha-` tag, because `latest` is limited to the default branch.
+2. `homelab-config` `services/pirate-radio/` owns runtime: Compose (pulls
+   `:latest`, plus Postgres), non-secret `.env.config`, and the list of
+   secrets rendered into the ignored runtime `.env` from GitHub Actions
+   secrets. The host registration is `hosts/macmini/services.yaml`.
+3. Rollout runs from `homelab-config`: its `Deploy` workflow (on push to its
+   `main`, or dispatched for host `macmini` and service `pirate-radio`), or
+   `scripts/redeploy-image --host macmini pirate-radio` on the host.
+4. A new runtime variable goes into `.env.example` here with a placeholder,
+   and into `homelab-config` (`.env.config`, or its secret list) in a separate
+   change. Never put real values in this repo.
+
+Agents must not push to `main`, dispatch `Container` or `Deploy`, or run
+`redeploy-image`.
+
+### Phase 1 generated host parsers: security non-negotiables
+
+These bind any generated host-adapter or parser work (`propose-adapter` and
+its successors). They are requirements for Phase 1. Code does not enforce
+them yet, so each one needs its check before generated parsers ship.
+
+- PR only. A generated parser reaches users only through a pull request that a
+  human reviews and merges, followed by the normal image build and deploy. No
+  auto-merge. The running service never hot-loads, downloads, or evaluates
+  parser code or parser data at runtime.
+- Declarative only. A parser is data: selectors plus cleanup rules (remove
+  selectors, blocked-text patterns) that the existing extractor interprets. It
+  contains no executable code: no network, filesystem, shell or child-process
+  access, `eval`, `new Function`, or dynamic `import`.
+- CI allowlist enforcement. CI validates every generated parser against a
+  strict schema: allowlisted keys, value types, and size limits, in the
+  allowlisted directory and file format. CI fails the PR on any other file
+  change or any code-bearing field.
+- Sandboxed generation fetch. The agent or job that fetches sample pages to
+  generate a parser runs without runtime secrets: no `XAI_API_KEY`,
+  `X_API_BEARER_TOKEN`, Home Assistant or homelab-functions tokens,
+  `DATABASE_URL`, OIDC client secret, or Pirate Wires Playwright profile.
+  Treat fetched content and generated output as untrusted input.
 
 ## Implementation Notes
 
@@ -76,26 +236,29 @@ The cloud dev stack is defined in `.cursor/environment.json` + `scripts/dev/`
 - `install` (`scripts/dev/install.sh`, runs at Build): `npm ci`, Playwright
   chromium, local Postgres, `npm run build`.
 - `start` (`scripts/dev/start.sh`, per run): starts Postgres, ensures the
-  `pirate_radio` role/db, and runs `scripts/dev/seed.mjs`.
+  `pirate_radio` role plus the `pirate_radio` and `pirate_radio_qa` databases,
+  and runs `scripts/dev/seed.mjs`.
 - `terminals`: `scripts/dev/local-oidc.mjs` (local OIDC issuer) and
   `scripts/dev/serve.sh` (waits for the issuer, picks reachable feeds, runs
   `serve`).
+- Without those terminals, `npm run dev` runs the same sequence in one
+  foreground command. `npm run qa` needs only Postgres plus the QA database.
+  See "Local dev boot and reader QA" above.
 
 Durable gotchas and clarifications:
 
 - There is no lint script. Static checking is `npm run build` (`tsc`). Full
   verification set is under `## Verification` (`npm test`, `npm run build`,
   `docker build`).
-- `docker build` does not currently work in a cloud agent. There is a daemon on
-  `tcp://localhost:2375` but no client binary, and installing a static `docker`
-  CLI is not enough: `mcr.microsoft.com` is allowlisted while the blob CDN it
-  redirects to (`*.data.mcr.microsoft.com`) is not, so pulling the
-  `mcr.microsoft.com/playwright` base fails with `error pulling image
-  configuration: download failed after attempts=6: EOF`. Add
-  `*.data.mcr.microsoft.com` to the Network Access allowlist (applies on the
-  next freshly-booted agent) to enable it. Until then `npm test` +
-  `npm run build` are the checks a cloud agent can actually complete, which is
-  the same work the Dockerfile's build stage runs.
+- A cloud agent has a Docker daemon on `tcp://localhost:2375` but no `docker`
+  client binary. As of 2026-11-01 the `mcr.microsoft.com/playwright` base
+  pulls (the blob CDN `*.data.mcr.microsoft.com` is reachable), so run
+  `docker build` through the Engine API. Pack the context yourself, because
+  the API does not apply `.dockerignore`:
+  `tar --exclude=./node_modules --exclude=./dist --exclude=./.git --exclude=./output --exclude=./.playwright-profile --exclude='./.env*' -cf /tmp/ctx.tar . && curl -sN -X POST -H 'Content-Type: application/x-tar' --data-binary @/tmp/ctx.tar 'http://localhost:2375/build?t=pirate-radio:local&rm=1'`.
+  If the pull fails with `download failed after attempts=6: EOF`, the blob CDN
+  is not on the Network Access allowlist. In that case `npm test` +
+  `npm run build` cover the same work as the Dockerfile build stage.
 - `npm test` runs offline against mocks/fixtures. The Postgres integration suite
   (`tests/database.integration.test.ts`) is skipped unless
   `PIRATE_RADIO_TEST_DATABASE_URL` points at a reachable Postgres.
