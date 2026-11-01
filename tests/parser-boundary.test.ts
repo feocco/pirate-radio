@@ -61,13 +61,13 @@ function importSpecifiers(source: string): string[] {
   return specifiers;
 }
 
-describe("parser slice 1 boundary", () => {
+describe("parser module boundary", () => {
   test("ships the trusted pure modules and no domain specs", () => {
     expect(existsSync("src/parsers/spec.ts")).toBe(true);
     expect(existsSync("src/parsers/engine.ts")).toBe(true);
     expect(existsSync("src/parsers/invariants.ts")).toBe(true);
+    expect(existsSync("src/parsers/criteria.ts")).toBe(true);
     expect(existsSync("src/parsers/registry.ts")).toBe(false);
-    expect(existsSync("src/parsers/criteria.ts")).toBe(false);
 
     const domains = join(parserRoot, "domains");
     const shipped = existsSync(domains) ? readdirSync(domains) : [];
@@ -81,6 +81,10 @@ describe("parser slice 1 boundary", () => {
     for (const file of files) {
       const source = readFileSync(file, "utf8");
       for (const specifier of importSpecifiers(source)) {
+        if (specifier === "node:crypto") {
+          expect(file, "only criteria.ts may import node:crypto").toBe(join(parserRoot, "criteria.ts"));
+          continue;
+        }
         const allowed =
           allowedPackages.has(specifier) ||
           specifier === "../types.js" ||
@@ -88,6 +92,7 @@ describe("parser slice 1 boundary", () => {
         expect(allowed, `${file} imports ${specifier}`).toBe(true);
       }
       for (const token of forbidden) {
+        if (token === "node:crypto" && file === join(parserRoot, "criteria.ts")) continue;
         expect(source, `${file} contains ${token}`).not.toContain(token);
       }
     }
