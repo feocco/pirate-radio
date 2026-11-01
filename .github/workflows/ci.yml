@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Throwaway credentials for an ephemeral CI-only database; not secrets.
+          POSTGRES_USER: pirate_radio
+          POSTGRES_PASSWORD: pirate_radio
+          POSTGRES_DB: pirate_radio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pirate_radio"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PIRATE_RADIO_TEST_DATABASE_URL: postgres://pirate_radio:pirate_radio@127.0.0.1:5432/pirate_radio_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
