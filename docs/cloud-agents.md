@@ -112,7 +112,15 @@ Cross-cutting:
   user secrets; user secrets are available from `start` onward.
 - **Saving the environment config or changing its secrets triggers a new Build.**
 
-## 5. How this maps to seeded / real data
+## 5. One-command boot and reader QA
+
+When the `terminals` are not running, `npm run dev` rebuilds, runs `start`,
+and starts the OIDC issuer and `serve` in one foreground command. `npm run qa`
+boots its own hermetic copy on free ports, with a mocked xAI and no external
+network, and checks the submit-to-reader flow in headless Chromium. Both are
+described in `AGENTS.md` under "Local dev boot and reader QA".
+
+## 6. How this maps to seeded / real data
 
 - Committed `scripts/dev/seed-assets/` gives deterministic, cost-free seeding on
   every run (no xAI call at runtime).
@@ -122,7 +130,7 @@ Cross-cutting:
 - Authenticated sources (Pirate Wires paywall, X) stay limited without
   credentials — see `.cursor/rules/authenticated-sources.mdc`.
 
-## 6. Logging in from your local machine (port forwarding)
+## 7. Logging in from your local machine (port forwarding)
 
 Cursor Desktop auto-forwards a running cloud agent's ports to your machine, so
 you can open the app locally at `http://localhost:8123`. OAuth here is

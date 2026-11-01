@@ -1,5 +1,84 @@
 # Pirate Radio
 
+## Authentication for bots
+
+Pirate Radio has no machine-to-machine authentication. The server accepts no
+API token, bearer token, API key, or service-account credential, and no
+environment variable configures one. A bot can only act as an Authentik user
+who signed in through the browser login flow.
+
+### Endpoint
+
+Use `https://reader.home.feocco.com` from a device on the tailnet.
+
+| Endpoint | Use it? | Why |
+| --- | --- | --- |
+| `https://reader.home.feocco.com` | Yes | It is the deployed `PIRATE_RADIO_PUBLIC_URL`, the only OIDC redirect URI registered in Authentik, and the only `Origin` the server accepts on writes. Its DNS record is a tailnet address, so the client needs tailnet ACL access to the Pirate Radio Tailscale Service. |
+| `https://reader.feocco.com` | No | The name does not exist. Authoritative DNS returns NXDOMAIN. |
+| Direct macmini port | No | Compose publishes the container port on the Mac mini's loopback only, and no Tailscale Serve port maps to it. Even on the host itself, the cookie and `Origin` checks are bound to `reader.home.feocco.com`. |
+
+### Credential accepted today
+
+The only credential is the `pirate_radio_session` cookie that a browser login
+creates:
+
+1. `GET /auth/login?returnTo=/path` starts an OIDC authorization code + PKCE
+   login against Authentik and sets a 10-minute `pirate_radio_oidc`
+   transaction cookie in that browser.
+2. Authentik signs the user in. The identity must be in `pirate-radio-users`.
+   Admin routes also need `pirate-radio-admins`.
+3. `GET /auth/callback` exchanges the code and sets `pirate_radio_session`. The
+   value is random and opaque. The server stores only its SHA-256 hash. The
+   cookie is `Secure`, `HttpOnly`, `SameSite=Lax`, and host-only, with a fixed,
+   non-rolling lifetime from `PIRATE_RADIO_SESSION_HOURS`.
+4. Every route except `/health`, `/auth/login`, and `/auth/callback` requires
+   that cookie. Without it the server returns `401`, as
+   `{"error":"authentication_required"}` JSON or as a sign-in page for HTML
+   `GET` requests.
+5. `POST`, `PUT`, `PATCH`, and `DELETE` also require
+   `Origin: https://reader.home.feocco.com` exactly, or the server returns
+   `403 {"error":"invalid_origin"}`.
+6. `POST /auth/logout` revokes the session server-side.
+
+The server ignores `Authorization: Bearer ...` and `X-API-Key` headers. The
+Authentik provider allows only the `authorization_code` grant, so client
+credentials and Authentik API tokens cannot create a Pirate Radio session
+either.
+
+The one path the code accepts for automation is a user session. A bot drives
+the browser login (for example, headless Playwright) as an Authentik account in
+`pirate-radio-users`. It then sends `Cookie: pirate_radio_session=<value>`,
+plus `Origin` on writes, and can check the session with `GET /auth/me`. That
+session carries the account's identity and groups, cannot be scoped, expires
+on the fixed lifetime, and ends at logout. It is not a reviewed bot
+integration.
+
+### Environment-variable contract for a bot
+
+There is none. Pirate Radio reads no environment variable that authenticates
+callers. `XAI_API_KEY`, `X_API_BEARER_TOKEN`, `HA_LONG_LIVED_TOKEN`,
+`HOMELAB_FUNCTIONS_TOKEN`, and `CURSOR_API_KEY` are outbound credentials the
+server uses to call other services. They do not authenticate requests to
+Pirate Radio, and bots should not receive them. Whatever variable a bot uses to
+hold its session cookie is that bot's own configuration, not a Pirate Radio
+contract.
+
+`PIRATE_RADIO_SERVICE_TOKEN`, or any similar name, is unsupported. No code
+reads it. Setting it on the server or sending its value as a bearer token has
+no effect. Machine-to-machine auth needs a reviewed design before any variable
+name becomes a contract. That design must cover identity, group-based access,
+scoping, rotation, and revocation.
+
+`npm run qa` enforces this contract against the real server. A bearer token,
+an `X-API-Key`, and a set `PIRATE_RADIO_SERVICE_TOKEN` are all rejected with
+`401`. The session cookie is accepted from a plain HTTP client. Writes without
+`Origin` get `403`, and logout revokes the session. The endpoint facts come
+from the `homelab-config` Pirate Radio service, the Authentik blueprint, and
+public DNS on 2026-11-01. A live HTTPS request over the tailnet has not been
+checked from the cloud dev environment, which is not on the tailnet.
+
+## About
+
 OIDC-protected homelab reader and local CLI for collecting articles from across
 the web, queueing pasted text, generating xAI text-to-speech audio, and
 reading generated audio with cached article art where available. Supported
@@ -96,7 +175,13 @@ ElevenLabs can be added later without changing the extraction commands.
 ```bash
 npm test
 npm run build
+npm run qa
 ```
+
+`npm run qa` is the headless Playwright reader check. It needs local Postgres
+with the `pirate_radio_qa` database (`bash scripts/dev/start.sh` creates it)
+and uses a mocked xAI, so no real key is involved. `npm run dev` boots the full
+seeded dev stack. See `AGENTS.md` for both.
 
 ## Service Mode
 
