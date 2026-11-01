@@ -25,12 +25,19 @@ export function checkInvariants(parsed: ParsedArticle): Array<{ code: InvariantC
     fields.push([`images[${index}].alt`, image.alt]);
   });
 
-  for (const [path, value] of fields) {
-    if (!value) continue;
-    if (SCRIPT_TEXT.test(value)) issues.push({ code: "script_text", detail: `${path} contains script content` });
-    if (TAG_SHAPED.test(value) || ESCAPED_MARKUP.test(value)) {
-      issues.push({ code: "raw_html", detail: `${path} contains raw HTML` });
-    }
-  }
+  for (const [path, value] of fields) issues.push(...markupIssues(path, value));
   return issues;
+}
+
+export function markupIssues(
+  path: string,
+  value: string | undefined,
+): Array<{ code: "raw_html" | "script_text"; detail: string }> {
+  if (!value) return [];
+  const found: Array<{ code: "raw_html" | "script_text"; detail: string }> = [];
+  if (SCRIPT_TEXT.test(value)) found.push({ code: "script_text", detail: `${path} contains script content` });
+  if (TAG_SHAPED.test(value) || ESCAPED_MARKUP.test(value)) {
+    found.push({ code: "raw_html", detail: `${path} contains raw HTML` });
+  }
+  return found;
 }
