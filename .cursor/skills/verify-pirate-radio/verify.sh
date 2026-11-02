@@ -6,7 +6,8 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 STATE="$ROOT/output/qa/verify/state.json"
-DB_NAME="pirate_radio_verify"
+SCRIPT="$ROOT/.cursor/skills/verify-pirate-radio/verify.sh"
+DB_NAME_PATTERN='^pirate_radio_verify_[a-z0-9_]+$'
 
 usage() {
   echo "usage: bash .cursor/skills/verify-pirate-radio/verify.sh launch|doctor|cleanup" >&2
@@ -30,6 +31,10 @@ write_state() {
     const fs = require("fs");
     const path = require("path");
     const env = process.env;
+    if (!/^pirate_radio_verify_[a-z0-9_]+$/.test(env.VERIFY_DB_NAME || "")) {
+      console.error("refusing database name");
+      process.exit(1);
+    }
     const state = {
       runId: env.VERIFY_RUN_ID,
       publicUrl: env.VERIFY_PUBLIC_URL,
@@ -39,7 +44,7 @@ write_state() {
       oidcPort: Number(env.VERIFY_OIDC_PORT),
       libraryDir: env.VERIFY_LIBRARY_DIR,
       devDir: env.VERIFY_DEV_DIR,
-      databaseName: "pirate_radio_verify",
+      databaseName: env.VERIFY_DB_NAME,
       pids: { oidc: Number(env.VERIFY_OIDC_PID), serve: Number(env.VERIFY_SERVE_PID) },
       evidenceDir: env.VERIFY_EVIDENCE_DIR,
       startedAt: env.VERIFY_STARTED_AT,
@@ -87,10 +92,31 @@ ensure_postgres() {
   fi
 }
 
+assert_verify_db_name() {
+  local name="$1"
+  if [[ ! "$name" =~ $DB_NAME_PATTERN ]]; then
+    echo "refusing database name ${name}" >&2
+    return 1
+  fi
+}
+
+database_url_for() {
+  assert_verify_db_name "$1"
+  printf 'postgres://pirate_radio:pirate_radio@127.0.0.1:5432/%s\n' "$1"
+}
+
+terminate_verify_db() {
+  local name="$1"
+  assert_verify_db_name "$name"
+  sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${name}' AND pid <> pg_backend_pid();"
+}
+
 reset_verify_db() {
-  sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'pirate_radio_verify' AND pid <> pg_backend_pid();"
-  sudo -u postgres dropdb --if-exists pirate_radio_verify
-  sudo -u postgres createdb -O pirate_radio pirate_radio_verify
+  local name="$1"
+  assert_verify_db_name "$name"
+  terminate_verify_db "$name"
+  sudo -u postgres dropdb --if-exists -- "$name"
+  sudo -u postgres createdb -O pirate_radio -- "$name"
 }
 
 preserve_logs() {
@@ -107,16 +133,19 @@ preserve_logs() {
 }
 
 launch() {
-  VERIFY_LAUNCH_OK=0
-  trap 'status=$?; if [ "$VERIFY_LAUNCH_OK" != 1 ]; then preserve_logs || true; "$0" cleanup || true; fi; exit "$status"' EXIT
   if [ -f "$STATE" ]; then
     echo "state exists at $STATE. Run cleanup before launch." >&2
     exit 1
   fi
-  unset XAI_API_KEY X_API_BEARER_TOKEN HA_LONG_LIVED_TOKEN HOMELAB_FUNCTIONS_TOKEN CURSOR_API_KEY HA_URL PIRATE_RADIO_SERVICE_TOKEN PIRATE_RADIO_SEED_DYNAMIC PIRATE_RADIO_REAUTH_URL
   cd "$ROOT"
+  VERIFY_LAUNCH_OK=0
+  trap 'status=$?; if [ "$VERIFY_LAUNCH_OK" != 1 ]; then preserve_logs || true; bash "$SCRIPT" cleanup || true; fi; exit "$status"' EXIT
+  unset XAI_API_KEY X_API_BEARER_TOKEN HA_LONG_LIVED_TOKEN HOMELAB_FUNCTIONS_TOKEN CURSOR_API_KEY HA_URL PIRATE_RADIO_SERVICE_TOKEN PIRATE_RADIO_SEED_DYNAMIC PIRATE_RADIO_REAUTH_URL
   npm run build
   VERIFY_RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  VERIFY_DB_NAME="pirate_radio_verify_$(printf '%s' "$VERIFY_RUN_ID" | tr '[:upper:]-' '[:lower:]_')"
+  assert_verify_db_name "$VERIFY_DB_NAME"
+  export VERIFY_DB_NAME
   VERIFY_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   VERIFY_DEV_DIR="/tmp/pirate-radio-verify-$VERIFY_RUN_ID"
   VERIFY_LIBRARY_DIR="$VERIFY_DEV_DIR/library"
@@ -149,7 +178,8 @@ launch() {
   export PIRATE_RADIO_DEV_DIR="$VERIFY_DEV_DIR"
   export PIRATE_RADIO_LIBRARY_DIR="$VERIFY_LIBRARY_DIR"
   export PIRATE_RADIO_STATE_PATH="$VERIFY_LIBRARY_DIR/state.json"
-  export DATABASE_URL="postgres://pirate_radio:pirate_radio@127.0.0.1:5432/${DB_NAME}"
+  export DATABASE_URL
+  DATABASE_URL="$(database_url_for "$VERIFY_DB_NAME")"
   export PIRATE_RADIO_POLL_INTERVAL_MS=86400000
   export PIRATE_RADIO_ENABLE_ALIGNMENT=false
   export PWR_HEADLESS=true
@@ -161,7 +191,7 @@ launch() {
   export VERIFY_OIDC_ISSUER="$PIRATE_RADIO_OIDC_ISSUER"
   write_state 0 0
   ensure_postgres
-  reset_verify_db
+  reset_verify_db "$VERIFY_DB_NAME"
   node scripts/dev/seed.mjs
   node -e '
     const fs = require("fs");
@@ -224,6 +254,7 @@ publicUrl $PIRATE_RADIO_PUBLIC_URL
 oidcIssuer $PIRATE_RADIO_OIDC_ISSUER
 oidcPid $oidc_pid
 servePid $serve_pid
+databaseName $VERIFY_DB_NAME
 libraryDir $VERIFY_LIBRARY_DIR
 evidenceDir $VERIFY_EVIDENCE_DIR
 EOF
@@ -249,7 +280,9 @@ doctor() {
     if (state.servicePort === 8123 || state.oidcPort === 9443 || state.servicePort === 5432) {
       fail("refusing shared dev ports");
     }
-    if (state.databaseName !== "pirate_radio_verify") fail("databaseName is not pirate_radio_verify");
+    const databaseName = String(state.databaseName || "");
+    if (!/^pirate_radio_verify_[a-z0-9_]+$/.test(databaseName)) fail("databaseName failed ^pirate_radio_verify_[a-z0-9_]+$");
+    const databaseUrl = "postgres://pirate_radio:pirate_radio@127.0.0.1:5432/" + databaseName;
     if (!String(state.libraryDir).startsWith("/tmp/pirate-radio-verify-")) fail("libraryDir is not a scratch library");
     if (!String(state.devDir).startsWith("/tmp/pirate-radio-verify-")) fail("devDir is not a scratch directory");
     function procText(pid, file) {
@@ -262,13 +295,15 @@ doctor() {
       if (!command.includes(needle)) fail("pid " + pid + " cmdline does not include " + needle + ": " + command.trim());
       const env = procText(pid, "environ").toString("utf8").split("\0");
       for (const pair of envPairs) {
-        if (!env.includes(pair)) fail("pid " + pid + " env missing " + pair.split("=")[0]);
+        const key = pair.slice(0, pair.indexOf("="));
+        if (!env.includes(pair)) fail("pid " + pid + " env " + key + " does not match this run");
       }
     }
     checkPid(state.pids.oidc, "local-oidc.mjs", ["PIRATE_RADIO_DEV_DIR=" + state.devDir]);
     checkPid(state.pids.serve, "dist/src/cli.js", [
       "PIRATE_RADIO_DEV_DIR=" + state.devDir,
       "SERVICE_PORT=" + state.servicePort,
+      "DATABASE_URL=" + databaseUrl,
     ]);
     const serveCommand = state.pids.serve && fs.existsSync(`/proc/${state.pids.serve}`)
       ? procText(state.pids.serve, "cmdline").toString("utf8").replaceAll("\0", " ")
@@ -359,10 +394,7 @@ cleanup() {
   evidence_dir=$(read_field evidenceDir)
   local database_name
   database_name=$(read_field databaseName)
-  if [ "$database_name" != "$DB_NAME" ]; then
-    echo "refusing to drop $database_name" >&2
-    exit 1
-  fi
+  assert_verify_db_name "$database_name"
   case "$dev_dir" in
     /tmp/pirate-radio-verify-[A-Za-z0-9T-]*) ;;
     *)
@@ -382,8 +414,9 @@ cleanup() {
   esac
   kill_matching "$serve_pid" "cli.js serve" "PIRATE_RADIO_DEV_DIR=$dev_dir"
   kill_matching "$oidc_pid" "local-oidc.mjs" "PIRATE_RADIO_DEV_DIR=$dev_dir"
-  sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'pirate_radio_verify' AND pid <> pg_backend_pid();"
-  sudo -u postgres dropdb --if-exists pirate_radio_verify
+  assert_verify_db_name "$database_name"
+  terminate_verify_db "$database_name"
+  sudo -u postgres dropdb --if-exists -- "$database_name"
   rm -rf "$dev_dir"
   rm -f "$STATE"
   if [ ! -d "$evidence_dir" ]; then

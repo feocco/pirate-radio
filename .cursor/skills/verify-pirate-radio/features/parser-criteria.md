@@ -31,6 +31,6 @@ Preconditions:
 ## Gotchas
 
 - `npm test` also runs this file, plus the rest of the suite. Use the file path above when you want only the fixture gates.
-- The fixture name is the sha256 of its bytes. Renaming it without changing the criteria digest fails the test.
+- The HTML filename is the sha256 of its bytes, and `criteria.json` must set `examples[0].fixture` to `fixtures/<that hash>.html`. Renaming the file without updating that field fails the test. Updating the field without recomputing `digest` also fails.
 - Do not replace the fixture with a live download. The committed file is redacted on purpose.
 - A generated parser still has to land through a reviewed pull request. This test does not deploy one, and the running service does not load `src/parsers/domains/` at request time.

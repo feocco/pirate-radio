@@ -35,7 +35,7 @@ function loadState() {
   assert(url.protocol === "http:" && url.hostname === "localhost", "publicUrl must be http://localhost:<port>");
   assert(Number(url.port) === state.servicePort, "publicUrl port does not match servicePort");
   assert(state.servicePort !== 8123 && state.oidcPort !== 9443, "refusing the shared dev ports");
-  assert(state.databaseName === "pirate_radio_verify", "refusing unexpected database");
+  assert(/^pirate_radio_verify_[a-z0-9_]+$/.test(String(state.databaseName || "")), "refusing unexpected database");
   assert(String(state.libraryDir).startsWith("/tmp/pirate-radio-verify-"), "refusing unexpected library");
   assert(String(state.evidenceDir).startsWith(path.join(root, "output/qa/verify") + path.sep), "refusing unexpected evidence dir");
   return state;
@@ -181,7 +181,29 @@ async function queueChecks(page, state) {
   const submissionText = await submissions.innerText();
   assert(submissionText.includes("succeeded"), "seeded submission is not succeeded");
   assert(submissionText.includes("demo.reader"), "seeded submission is missing demo.reader");
+  const queueResponse = await page.request.get(`${state.publicUrl}/queue.json`);
+  const queueBody = await queueResponse.json();
+  writeJson(state.evidenceDir, "queue.json", queueBody);
+  assert(queueResponse.status() === 200, `GET /queue.json status ${queueResponse.status()}`);
+  assert(Array.isArray(queueBody.items), "queue.json items is not a list");
+  const micronItem = queueBody.items.find((item) => item.title === "Inside Micron's Attempts");
+  assert(micronItem, "queue.json missing Inside Micron's Attempts");
+  assert(micronItem.converted === false, "queue.json marks Inside Micron's Attempts converted");
+  assert(queueBody.items.every((item) => item.title !== "Monday: Three Morning Takes"), "queue.json includes the filtered morning-takes row");
+  const submissionsResponse = await page.request.get(`${state.publicUrl}/submissions.json`);
+  const submissionsBody = await submissionsResponse.json();
+  writeJson(state.evidenceDir, "submissions.json", submissionsBody);
+  assert(submissionsResponse.status() === 200, `GET /submissions.json status ${submissionsResponse.status()}`);
+  assert(Array.isArray(submissionsBody.items), "submissions.json items is not a list");
+  for (const article of expectedArticles) {
+    const row = submissionsBody.items.find((item) => item.title === article.title);
+    assert(row, `submissions.json missing ${article.title}`);
+    assert(row.status === "succeeded", `${article.title} status is ${row.status}`);
+    assert(row.submittedByUsername === "demo.reader", `${article.title} submitter is not demo.reader`);
+  }
   await page.screenshot({ path: path.join(state.evidenceDir, "queue.png"), fullPage: true });
+  log(state.evidenceDir, "queue.json Inside Micron's Attempts");
+  log(state.evidenceDir, "submissions.json seeded succeeded");
   log(state.evidenceDir, "queue micron visible");
   log(state.evidenceDir, "queue convert not clicked");
 }

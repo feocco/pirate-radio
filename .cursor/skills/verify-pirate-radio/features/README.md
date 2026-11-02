@@ -6,7 +6,7 @@ This directory is the maintained source for verifying Pirate Radio. Read this in
 
 - Launch with `bash .cursor/skills/verify-pirate-radio/verify.sh launch`.
 - The state file is `output/qa/verify/state.json`. Use its `publicUrl`. The host is `localhost`.
-- The database name is `pirate_radio_verify`. The library directory is `/tmp/pirate-radio-verify-<runId>/library`.
+- The database name is the state file's `databaseName`, shaped `pirate_radio_verify_<run>`. The library directory is `/tmp/pirate-radio-verify-<runId>/library`.
 - Seed data is the three articles in `scripts/dev/seed-assets/articles.json`. The user is `demo.reader`.
 - The queue feed is the local issuer serving `tests/fixtures/pirate-feed.xml`.
 - Run `bash .cursor/skills/verify-pirate-radio/verify.sh doctor` and require `doctor ok` before a browser drive.
@@ -29,7 +29,7 @@ This directory is the maintained source for verifying Pirate Radio. Read this in
 - UI proof includes the PNG named in the feature file. The page title or the Pirate Radio wordmark has to be visible.
 - HTTP proof includes the status and the JSON body, with no `Cookie` header written to disk.
 - Mutation proof for queue conversion is the succeeded submission plus the article page from `npm run qa`.
-- Record the feature file name and the entry point in `drive.log` or the Vitest output.
+- `drive.log` names the step on its `ok` line (`health`, `auth`, `article`, `queue`, or `all`). Vitest prints the criteria file name when that command runs.
 - If a precondition is missing, report the command and the missing piece. Do not count a different path as a pass.
 
 ## Feature entry contract

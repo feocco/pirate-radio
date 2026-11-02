@@ -40,8 +40,6 @@ including pstack defaults.
 - Use exactly one model per task:
   - `claude-opus-5-5-high` for design, review, and judgment work.
   - `grok-4.7-high-fast` for implementation.
-  - `gpt-5.6-sol-high` is optional, and only as a single second reviewer on
-    risky changes.
 - Do not use `arena`, multiple candidate implementations, or three-model
   judging panels.
 - This repo uses one implementer and one reviewer, with no fan-outs unless Joe asks.
@@ -69,9 +67,9 @@ npm run cli -- speak output/json/<slug>.json --provider xai
 npm run cli -- read "<url>" --provider xai
 npm run cli -- poll
 npm run cli -- serve
-npm run cli -- simulate
-npm run cli -- migrate-progress
-npm run cli -- export-progress
+npm run cli -- simulate <decision> <slug>
+npm run cli -- migrate-progress --user-id <id>
+npm run cli -- export-progress --user-id <id>
 npm run cli -- propose-adapter "<url>"
 ```
 
@@ -164,15 +162,8 @@ the matching private `homelab-config` registration separately.
 
 ### Local dev boot and reader QA
 
-- `npm run dev` (`scripts/dev/up.sh`) boots the full stack in one command. It
-  rebuilds `dist/`, runs `start.sh` (Postgres, the `pirate_radio` and
-  `pirate_radio_qa` databases, and the fixture seed of 3 articles with audio),
-  starts the local OIDC issuer, then runs `serve` in the foreground at
-  `http://localhost:8123`. Sign-in auto-approves `demo.reader`. If the
-  environment's `serve` terminal already answers on that port, it exits and
-  says so. Set `SERVICE_PORT` and `LOCAL_OIDC_PORT` to boot a second stack.
-  Always rebuild before trusting a running stack: `start.sh` and `serve.sh`
-  run whatever `dist/` holds.
+- `npm run dev` is specified in Run the app. `scripts/dev/start.sh` also
+  creates the `pirate_radio_qa` database used by `npm run qa`.
 - `npm run qa` (`tests/qa/`, Playwright, headless Chromium) builds, then boots
   its own hermetic stack: the real built `serve` on free ports, a temporary
   library, the `pirate_radio_qa` database, and a local OIDC issuer as

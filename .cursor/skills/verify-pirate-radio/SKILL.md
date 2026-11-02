@@ -7,6 +7,8 @@ description: Drive the local Pirate Radio web reader and the First Things parser
 
 Prove the local reader by starting a scratch service, signing in through the dev OIDC issuer, and checking what a member can see. Parser criteria run separately against the committed First Things fixture. Do not point this skill at `reader.home.feocco.com` or any other deployed host.
 
+`verify.sh` targets the Linux cloud and dev environment. It reads `/proc`, runs `sudo -u postgres`, and expects local Postgres on port `5432`.
+
 The dev issuer auto-approves `demo.reader`. It is a local stand-in so this repo can boot without Authentik. Production auth stays on the homelab IdP. Never add a second login, a bearer token, or a service token here.
 
 ## Journey
@@ -19,13 +21,13 @@ Follow this order. A later step does not count as proof of an earlier step you s
 | --- | --- | --- |
 | 1. Launch | `bash .cursor/skills/verify-pirate-radio/verify.sh launch` | Doctor prints `doctor ok` and the scratch `index.json` has the three seed slugs. |
 | 2. Doctor | `bash .cursor/skills/verify-pirate-radio/verify.sh doctor` | The recorded pids are alive, their env matches this run, `/health` returns `{"ok":true}`, and the issuer discovery URL returns 200. |
-| 3. Health | `node .cursor/skills/verify-pirate-radio/drive.mjs health` | `evidence/health.json` is `{"ok":true}` and an anonymous `GET /library.json` is 401 `authentication_required`. |
-| 4. Sign in and library | `node .cursor/skills/verify-pirate-radio/drive.mjs auth` | `evidence/library.png` shows the three seeded titles and `evidence/auth-me.json` has `demo.reader`. |
-| 5. Article | `node .cursor/skills/verify-pirate-radio/drive.mjs article` | `evidence/article.png` shows the generalist title, the opening sentence, and a player duration that is not `00:00`. |
-| 6. Queue page | `node .cursor/skills/verify-pirate-radio/drive.mjs queue` | `evidence/queue.png` shows the paste form and `Inside Micron's Attempts` with `Convert` still unclicked. |
-| 7. Queue conversion | `npm run qa` | Playwright reports the Harbor Lights fixture title, body, and player. Screenshot is `output/qa/test-results/reader-article.png`. |
+| 3. Health | `node .cursor/skills/verify-pirate-radio/drive.mjs health` | `<evidenceDir>/health.json` is `{"ok":true}` and an anonymous `GET /library.json` is 401 `authentication_required`. |
+| 4. Sign in and library | `node .cursor/skills/verify-pirate-radio/drive.mjs auth` | `<evidenceDir>/library.png` shows the three seeded titles and `<evidenceDir>/auth-me.json` has `demo.reader`. |
+| 5. Article | `node .cursor/skills/verify-pirate-radio/drive.mjs article` | `<evidenceDir>/article.png` shows the generalist title, the opening sentence, and a player duration that is not `00:00`. |
+| 6. Queue page | `node .cursor/skills/verify-pirate-radio/drive.mjs queue` | `<evidenceDir>/queue.png` shows the paste form and `Inside Micron's Attempts` with `Convert` still unclicked. `<evidenceDir>/queue.json` and `<evidenceDir>/submissions.json` match that page. |
+| 7. Queue conversion | `npm run qa` | Playwright reports the Harbor Lights fixture title, body, and player. Screenshot is `output/qa/test-results/**/reader-article.png`. |
 | 8. Parser criteria | `npx vitest run tests/first-things-criteria.test.ts` | The test passes all five gates on the committed fixture. |
-| 9. Cleanup | `bash .cursor/skills/verify-pirate-radio/verify.sh cleanup` | Those two pids are gone, `pirate_radio_verify` is dropped, the scratch directory is gone, and the evidence directory is still there. |
+| 9. Cleanup | `bash .cursor/skills/verify-pirate-radio/verify.sh cleanup` | Those two pids are gone, the database named in the state file is dropped, the scratch directory is gone, and the evidence directory is still there. |
 
 `node .cursor/skills/verify-pirate-radio/drive.mjs all` runs steps 3 through 6 in one browser session. Run steps 7 and 8 yourself. They do not use the scratch service.
 
@@ -39,7 +41,7 @@ From the repo root:
 bash .cursor/skills/verify-pirate-radio/verify.sh launch
 ```
 
-Launch runs `npm run build`, ensures local Postgres is accepting connections, creates the database `pirate_radio_verify`, and seeds `scripts/dev/seed-assets/` into a new directory under `/tmp/pirate-radio-verify-<runId>/`. It then starts `scripts/dev/local-oidc.mjs` and `node dist/src/cli.js serve` on two free ports. It will not bind `8123`, `9443`, or `5432`.
+Launch runs `npm run build`, ensures local Postgres is accepting connections, and creates a new database named `pirate_radio_verify_` plus the lowercased run id, with `-` turned into `_`. The name must match `^pirate_radio_verify_[a-z0-9_]+$`. It is stored as `databaseName`. Two worktrees do not share that database. Launch seeds `scripts/dev/seed-assets/` into a new directory under `/tmp/pirate-radio-verify-<runId>/`. It then starts `scripts/dev/local-oidc.mjs` and `node dist/src/cli.js serve` on two free ports. It will not bind `8123`, `9443`, or `5432`.
 
 The public origin is `http://localhost:<servicePort>`. The issuer is `https://localhost:<oidcPort>`. `serve` binds `127.0.0.1` and trusts the dev issuer with `NODE_TLS_REJECT_UNAUTHORIZED=0`, which is dev-only, same as `scripts/dev/env.sh`. The feed list is only the issuer's `/feed.xml`, which serves `tests/fixtures/pirate-feed.xml`. Launch unsets `XAI_API_KEY`, `X_API_BEARER_TOKEN`, `HA_LONG_LIVED_TOKEN`, `HOMELAB_FUNCTIONS_TOKEN`, `CURSOR_API_KEY`, `HA_URL`, and `PIRATE_RADIO_SERVICE_TOKEN` for this process.
 
@@ -52,7 +54,7 @@ Ready means all of these are true:
 
 If Postgres is not already up, launch runs `bash scripts/dev/start.sh`. That script also idempotently seeds the default `pirate_radio` database and `output/library`. When Postgres is already up, launch does not reseed that library.
 
-If `output/qa/verify/state.json` already exists, launch exits and tells you to clean up. It will not attach to a stack it did not start, including the cloud `serve` terminal on port `8123`.
+If `output/qa/verify/state.json` already exists, launch exits before it installs the failure cleanup trap. The existing state, pids, scratch directory, evidence, and database stay as they are. Launch will not attach to a stack it did not start, including the cloud `serve` terminal on port `8123`.
 
 ## Doctor
 
@@ -60,7 +62,7 @@ If `output/qa/verify/state.json` already exists, launch exits and tells you to c
 bash .cursor/skills/verify-pirate-radio/verify.sh doctor
 ```
 
-Doctor is read-only. It fails unless the state file exists, both pids are alive, `/proc/<pid>/cmdline` is `local-oidc.mjs` or `dist/src/cli.js serve`, and that process environment contains this run's `PIRATE_RADIO_DEV_DIR` and serve port. It then checks health on both `127.0.0.1` and `localhost`, issuer discovery, and the three seed slugs. Run it before any drive when a page looks wrong.
+Doctor is read-only. It fails unless the state file exists, `databaseName` matches `^pirate_radio_verify_[a-z0-9_]+$`, both pids are alive, `/proc/<pid>/cmdline` is `local-oidc.mjs` or `dist/src/cli.js serve`, and the serve process environment contains this run's `PIRATE_RADIO_DEV_DIR`, serve port, and `DATABASE_URL` for that exact database. It then checks health on both `127.0.0.1` and `localhost`, issuer discovery, and the three seed slugs. Run it before any drive when a page looks wrong.
 
 ## Drive
 
@@ -90,9 +92,10 @@ Write proof under the `evidenceDir` in the state file. `drive.mjs` writes:
 - `sign-in.png` before login and `library.png` after it
 - `auth-me.json`, `library.json`, `progress.json`
 - `article.png` and `queue.png`
-- `drive.log` with one line per check and no cookie values
+- `queue.json` and `submissions.json` from the signed-in queue page
+- `drive.log` records each check and ends with `ok <step>`, where `<step>` is `health`, `auth`, `article`, `queue`, or `all`. It has no cookie values.
 
-`npm run qa` writes `output/qa/test-results/`, including `reader-article.png`. `PIRATE_RADIO_QA_EVIDENCE=1 npm run qa` also writes a trace and a video. `tests/qa/redact-traces.ts` redacts cookies and OIDC codes. Still do not commit those files.
+`npm run qa` writes `output/qa/test-results/**/reader-article.png`. `PIRATE_RADIO_QA_EVIDENCE=1 npm run qa` also writes a trace and a video. `tests/qa/redact-traces.ts` redacts cookies and OIDC codes. Still do not commit those files.
 
 A failed launch copies `oidc.log` and `serve.log` into the evidence directory before it deletes the scratch directory. Those copies are for the failed run. Do not commit them.
 
@@ -108,7 +111,7 @@ bash .cursor/skills/verify-pirate-radio/verify.sh cleanup
 
 Cleanup reads the state file and signals only those pids. It sends `SIGTERM`, waits, then `SIGKILL` if that pid is still the process this run started. It checks cmdline and `PIRATE_RADIO_DEV_DIR` before every signal. It never uses `pkill`, `killall`, or a process-name match.
 
-It then terminates sessions on `pirate_radio_verify` and drops that database only. It deletes the `/tmp/pirate-radio-verify-<runId>` directory and the state file. It does not delete `evidenceDir`, `output/qa/test-results/`, `output/library`, `pirate_radio`, or `pirate_radio_qa`.
+It then terminates sessions on the `databaseName` from the state file and drops that database only, after the name matches `^pirate_radio_verify_[a-z0-9_]+$`. `createdb` and `dropdb` receive the name as one quoted argument. It deletes the `/tmp/pirate-radio-verify-<runId>` directory and the state file. It does not delete `evidenceDir`, `output/qa/test-results/`, `output/library`, `pirate_radio`, `pirate_radio_qa`, or another run's verify database.
 
 Run cleanup after a failed launch too. The launch command does that itself when it exits with an error.
 
