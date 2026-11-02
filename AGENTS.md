@@ -2,9 +2,11 @@
 
 ## Authentication for bots
 
-There is no machine-to-machine auth. The server accepts no API token, bearer
-token, API key, or service-account credential, and reads no environment
-variable that authenticates callers. The full contract is in
+Never build custom auth; if auth is needed, reuse the homelab IdP.
+
+That IdP is Authentik. There is no machine-to-machine auth. The server accepts
+no API token, bearer token, API key, or service-account credential, and reads
+no environment variable that authenticates callers. The full contract is in
 [README.md](README.md#authentication-for-bots). The short version:
 
 - Endpoint: `https://reader.home.feocco.com`, reached from a device on the
@@ -42,9 +44,90 @@ including pstack defaults.
     risky changes.
 - Do not use `arena`, multiple candidate implementations, or three-model
   judging panels.
+- This repo uses one implementer and one reviewer, with no fan-outs unless Joe asks.
 - Bug fixes are pre-approved to open pull requests.
 - No one merges a pull request or deploys without Joe's explicit approval,
   relayed by Engineer Bot. Opening a PR is not approval to merge it.
+
+## Run the app
+
+`npm run dev` (`scripts/dev/up.sh`) rebuilds `dist/`, starts Postgres, seeds
+three fixture articles, starts the local OIDC issuer, and serves the reader at
+`http://localhost:8123`. Sign-in auto-approves `demo.reader`. If that port
+already answers, the command exits. Set `SERVICE_PORT` and `LOCAL_OIDC_PORT`
+to boot a second stack. Open the reader on `localhost`, not `127.0.0.1`.
+
+`npm start` runs `node dist/src/cli.js serve` and does not boot Postgres, the
+issuer, or the seed. Use it only when those are already up. `start.sh` and
+`serve.sh` run whatever `dist/` holds, so rebuild before trusting a running
+process.
+
+```bash
+npm run cli -- login
+npm run cli -- extract "<url>"
+npm run cli -- speak output/json/<slug>.json --provider xai
+npm run cli -- read "<url>" --provider xai
+npm run cli -- poll
+npm run cli -- serve
+npm run cli -- simulate
+npm run cli -- migrate-progress
+npm run cli -- export-progress
+npm run cli -- propose-adapter "<url>"
+```
+
+`propose-adapter` opens a pull request and does not merge it. `login` writes
+`.playwright-profile/`, which stays uncommitted. `speak` and `read` call xAI
+and need `XAI_API_KEY`.
+
+## Test
+
+```bash
+npm test
+npm run build
+npm run qa
+```
+
+`npm test` is Vitest and runs offline against mocks and fixtures. The Postgres
+suite `tests/database.integration.test.ts` is skipped unless
+`PIRATE_RADIO_TEST_DATABASE_URL` points at a database that is not the dev
+`DATABASE_URL`. `npm run build` is `tsc` after
+`scripts/parsers/generate-registry.ts`. There is no lint script. `npm run qa`
+builds, then Playwright drives a hermetic `serve` on free ports against
+`pirate_radio_qa`.
+
+`docker build -t pirate-radio:local .` is the image check. The cloud Engine
+API form is in the Cursor Cloud section below.
+
+Publish checks do not open the seeded reader. To prove that running service,
+follow `.cursor/skills/verify-pirate-radio/SKILL.md`. That skill does not
+replace `npm test` or `npm run qa`.
+
+## Conventions
+
+- Application code is TypeScript ESM in `src/`. `tsconfig.json` writes `dist/`
+  with `rootDir` `.`. Dev seed and `serve` import `dist/`.
+- HTTP routes are in `src/server.ts`. Page HTML is in `src/reader.ts`. Library
+  and article playback both call `src/mediaPlayer.ts`. Do not add another player.
+- Caller auth is the OIDC session in `src/auth.ts`. Application identity is
+  `(issuer, subject)`. Do not authorize from a username, an email, or a
+  forwarded header. The only unauthenticated routes are `/health`,
+  `/auth/login`, and `/auth/callback`.
+- Postgres (`src/database.ts`) holds users, sessions, progress, and
+  submissions. MP3, story JSON, images, alignment, and `index.json` stay in
+  the library directory. `src/library.ts` replaces `index.json` by writing a
+  temp file and renaming it. `src/state.ts` does the same for service state.
+- A host parser is data under `src/parsers/domains/<id>/` (`parser.json`,
+  `criteria.json`, and `fixtures/<sha256>.html`). The committed First Things
+  domain is criteria plus one redacted fixture and has no `parser.json`.
+  `src/parsers/generated/registry.ts` is generated. Do not hot-load parser code.
+- Vitest tests live in `tests/`. The browser check lives in `tests/qa/`.
+  Shared fixtures live in `tests/fixtures/` and `scripts/dev/seed-assets/`.
+- `scripts/dev/local-oidc.mjs`, `scripts/dev/seed.mjs`, and
+  `tests/qa/network-stub.mjs` exit unless `PIRATE_RADIO_DEV_STACK=1` and
+  `NODE_ENV` is not `production`.
+- Keep the CLI names in `src/cli.ts`. Article deletion stays on `/admin` and
+  archives files under the library `trash/` directory before it rewrites
+  `index.json`.
 
 ## Scope
 
@@ -75,8 +158,9 @@ npm run qa
 docker build -t pirate-radio:local .
 ```
 
-For deployment work, validate the matching private `homelab-config`
-registration separately.
+Run, test, and layout rules are in the sections above. Seeded reader proof is
+`.cursor/skills/verify-pirate-radio/SKILL.md`. For deployment work, validate
+the matching private `homelab-config` registration separately.
 
 ### Local dev boot and reader QA
 
