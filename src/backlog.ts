@@ -294,6 +294,25 @@ async function resolveOpenSubstackUrl(
   }
 }
 
+const ARTICLE_HOSTNAME =
+  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+
+export function isFirstPartyArticleHost(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
+  const bare = normalized.startsWith("www.") ? normalized.slice(4) : normalized;
+  return knownArticleHost(normalized) || knownArticleHost(bare) || knownArticleHost(`www.${bare}`);
+}
+
+function knownArticleHost(host: string): boolean {
+  if (isXHostname(host)) return true;
+  if (!host || !ARTICLE_HOSTNAME.test(host)) return false;
+  try {
+    return sourceForUrl(new URL(`https://${host}/`)) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 function sourceForUrl(
   url: URL,
 ): { sourceType: ArticleSourceType; sourceName: string } | undefined {

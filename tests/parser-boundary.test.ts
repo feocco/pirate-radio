@@ -62,12 +62,13 @@ function importSpecifiers(source: string): string[] {
 }
 
 describe("parser module boundary", () => {
-  test("ships the trusted pure modules and one redacted criteria fixture", () => {
+  test("ships the trusted pure modules, the compiled registry, and one criteria-only fixture", () => {
     expect(existsSync("src/parsers/spec.ts")).toBe(true);
     expect(existsSync("src/parsers/engine.ts")).toBe(true);
     expect(existsSync("src/parsers/invariants.ts")).toBe(true);
     expect(existsSync("src/parsers/criteria.ts")).toBe(true);
-    expect(existsSync("src/parsers/registry.ts")).toBe(false);
+    expect(existsSync("src/parsers/registry.ts")).toBe(true);
+    expect(existsSync("src/parsers/generated/registry.ts")).toBe(true);
 
     const domains = join(parserRoot, "domains");
     expect(readdirSync(domains).sort()).toEqual(["first-things"]);

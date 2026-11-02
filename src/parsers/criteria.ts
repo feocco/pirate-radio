@@ -59,7 +59,7 @@ const GATES: readonly AcceptanceGate[] = [
   "phrases_ordered",
   "no_script_or_raw_html",
 ];
-const FIXTURE_BYTES_MAX = 1_000_000;
+export const fixtureBytesMax = 1_000_000;
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 const FIXTURE_PATH = /^fixtures\/[0-9a-f]{64}\.html$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -84,8 +84,12 @@ class Issues {
   }
 }
 
+export function sha256Hex(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 export function criteriaDigest(examples: readonly CriteriaExample[]): string {
-  return createHash("sha256").update(canonicalJson(examples)).digest("hex");
+  return sha256Hex(canonicalJson(examples));
 }
 
 export function parseParserCriteria(raw: unknown): ParserCriteriaV1 {
@@ -157,11 +161,11 @@ function readHtml(fixture: string, index: number, readFixture: (path: string) =>
     throw new CriteriaError([{ path, message: "readFixture must return the fixture HTML string" }]);
   }
   const bytes = new TextEncoder().encode(html).byteLength;
-  if (bytes > FIXTURE_BYTES_MAX) {
-    throw new CriteriaError([{ path, message: `fixture is larger than ${FIXTURE_BYTES_MAX} bytes` }]);
+  if (bytes > fixtureBytesMax) {
+    throw new CriteriaError([{ path, message: `fixture is larger than ${fixtureBytesMax} bytes` }]);
   }
   const named = fixture.slice("fixtures/".length, -".html".length);
-  const actual = createHash("sha256").update(html).digest("hex");
+  const actual = sha256Hex(html);
   if (actual !== named) {
     throw new CriteriaError([{ path, message: "content sha256 does not match the fixture name" }]);
   }
