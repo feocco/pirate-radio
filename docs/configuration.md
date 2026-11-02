@@ -15,6 +15,7 @@ The app reads configuration from environment variables.
 | `PIRATE_RADIO_POLL_INTERVAL_MS` | `900000` | Poll interval. |
 | `PIRATE_RADIO_MAX_NOTIFICATIONS_PER_POLL` | `1` | Notification cap per poll. |
 | `PIRATE_RADIO_ENABLE_ALIGNMENT` | `false` | Set to `true` to run the optional post-TTS Whisper word-timestamp prototype. |
+| `PIRATE_RADIO_DISABLED_PARSERS` | empty | Comma-separated parser ids skipped by `matchParser`. Empty leaves the compiled registry unchanged. Queue and extract handlers keep the current URL classifier until request routing is wired. |
 | `DATABASE_URL` | none | Required Postgres connection URL for application identity and per-user state. |
 | `PIRATE_RADIO_OIDC_ISSUER` | none | Required exact Authentik provider issuer URL. |
 | `PIRATE_RADIO_OIDC_CLIENT_ID` | none | Required OIDC client id. |

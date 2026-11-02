@@ -7,6 +7,7 @@ COPY tsconfig.json vitest.config.ts ./
 COPY src ./src
 COPY tests ./tests
 COPY scripts/dev/*.sh ./scripts/dev/
+COPY scripts/parsers ./scripts/parsers
 RUN npm test && npm run build
 
 FROM mcr.microsoft.com/playwright:v1.60.0-noble

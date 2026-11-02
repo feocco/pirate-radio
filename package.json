@@ -9,10 +9,12 @@
   },
   "scripts": {
     "build": "tsc",
+    "prebuild": "tsx scripts/parsers/generate-registry.ts",
     "cli": "tsx src/cli.ts",
     "dev": "bash scripts/dev/up.sh",
     "qa": "npm run build && playwright test -c tests/qa",
     "start": "node dist/src/cli.js serve",
+    "pretest": "tsx scripts/parsers/generate-registry.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
