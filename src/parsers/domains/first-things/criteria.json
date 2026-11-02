@@ -1,0 +1,33 @@
+{
+  "schema": "pirate-radio/parser-criteria@1",
+  "parserId": "first-things",
+  "host": "firstthings.com",
+  "digest": "ff78fb75054362ef680e0599013b6b858b9d99d5d4be08e73f3c22c797453407",
+  "examples": [
+    {
+      "submissionId": "6f8c2a1e-4b37-4c5d-9e10-a1b2c3d4e5f6",
+      "url": "https://firstthings.com/voyages-to-the-end-of-the-world/",
+      "fixture": "fixtures/2d74b9d666a4fc56265811332fdb1fb4c3ca2e1fde16c0f44c4d8694de7ad10e.html",
+      "rawSnapshotSha256": "f673b7a92a1a34d1d6627a30648268e3af17b7a8fd849ef3a4ebc1269833902b",
+      "title": "Voyages to the End of the World",
+      "firstWords": [
+        "Francis",
+        "Bacon",
+        "dreamed",
+        "of",
+        "abolishing"
+      ],
+      "lastWords": [
+        "have",
+        "faith",
+        "that",
+        "he",
+        "will."
+      ],
+      "phrases": [
+        "might warn off potential invaders.",
+        "confronting a dragon representing Satan"
+      ]
+    }
+  ]
+}

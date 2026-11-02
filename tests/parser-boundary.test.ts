@@ -62,7 +62,7 @@ function importSpecifiers(source: string): string[] {
 }
 
 describe("parser module boundary", () => {
-  test("ships the trusted pure modules and no domain specs", () => {
+  test("ships the trusted pure modules and one redacted criteria fixture", () => {
     expect(existsSync("src/parsers/spec.ts")).toBe(true);
     expect(existsSync("src/parsers/engine.ts")).toBe(true);
     expect(existsSync("src/parsers/invariants.ts")).toBe(true);
@@ -70,8 +70,13 @@ describe("parser module boundary", () => {
     expect(existsSync("src/parsers/registry.ts")).toBe(false);
 
     const domains = join(parserRoot, "domains");
-    const shipped = existsSync(domains) ? readdirSync(domains) : [];
-    expect(shipped).toEqual([]);
+    expect(readdirSync(domains).sort()).toEqual(["first-things"]);
+    const domain = join(domains, "first-things");
+    expect(readdirSync(domain).sort()).toEqual(["criteria.json", "fixtures"]);
+    expect(existsSync(join(domain, "parser.json"))).toBe(false);
+    const fixtures = readdirSync(join(domain, "fixtures"));
+    expect(fixtures).toHaveLength(1);
+    expect(fixtures[0]).toMatch(/^[0-9a-f]{64}\.html$/);
   });
 
   test("imports only the pure HTML packages, relative parser modules, and story types", () => {
