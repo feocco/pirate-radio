@@ -6,6 +6,7 @@ RUN npm ci
 COPY tsconfig.json vitest.config.ts ./
 COPY src ./src
 COPY tests ./tests
+COPY .cursor/skills/verify-pirate-radio/verify.sh .cursor/skills/verify-pirate-radio/verify.sh
 COPY scripts/dev/*.sh ./scripts/dev/
 COPY scripts/parsers ./scripts/parsers
 RUN npm test && npm run build
