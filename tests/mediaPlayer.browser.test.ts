@@ -178,7 +178,7 @@ describe.skipIf(!existsSync(chromium.executablePath()))("shared media player in 
     expect(hits("GET", "/alignment/alpha.json")).toBe(1);
     expect(hits("PUT", "/progress/")).toBe(0);
     expect(await page.textContent("#article-player .shk-time_now")).toBe("00:20");
-    expect(await page.textContent("#article-player .shk-time_duration")).not.toBe("00:00");
+    expect(await page.textContent("#article-player .shk-time_duration")).toBe("00:45");
     expect(errors).toEqual([]);
   });
 });

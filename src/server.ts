@@ -19,7 +19,7 @@ import { validateIdentityConfig, type PirateRadioConfig } from "./config.js";
 import { PirateRadioDatabase, type PirateRadioStore } from "./database.js";
 import { HomeAssistantActionListener } from "./haActions.js";
 import type { SubmissionStatus } from "./identity.js";
-import { archiveLibraryItem, readLibraryManifest } from "./library.js";
+import { archiveLibraryItem, backfillLibraryDurations, readLibraryManifest } from "./library.js";
 import {
   buildArticleFailureNotification,
   buildArticleNotification,
@@ -124,6 +124,7 @@ export class PirateRadioService {
     await this.database.migrate();
     this.authenticator = this.options.authenticator ?? new OidcAuthenticator(this.options.config, this.database);
     await this.authenticator.initialize();
+    await backfillLibraryDurations(this.options.config.libraryDir);
     const requestHandler = createPirateRadioRequestHandler({
       config: this.options.config,
       getState: () => this.getState(),

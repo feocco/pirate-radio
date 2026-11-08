@@ -192,6 +192,14 @@ describe("reader page", () => {
     expect(renderMediaPlayerClient()).toContain("escapePlayerText(track.title)");
   });
 
+  test("passes a positive duration to the player and drops any other value", () => {
+    expect(mediaPlayerTrack({ ...articleItem, durationSeconds: 44.568 }).durationSeconds).toBe(44.568);
+    expect(mediaPlayerTrack({ ...articleItem, durationSeconds: 0 }).durationSeconds).toBeUndefined();
+    expect(mediaPlayerTrack({ ...articleItem, durationSeconds: -1 }).durationSeconds).toBeUndefined();
+    expect(mediaPlayerTrack({ ...articleItem, durationSeconds: Number.NaN }).durationSeconds).toBeUndefined();
+    expect(mediaPlayerTrack(articleItem).durationSeconds).toBeUndefined();
+  });
+
   test("destroys library players before sort or filter rerenders and reactivates media session on play", () => {
     const html = renderReaderHtml();
     expect(html).toContain("let libraryPlayers = []");
