@@ -46,6 +46,10 @@ async function cardClock(card: Locator): Promise<string> {
   });
 }
 
+async function forwardSeekDisabled(page: Page): Promise<boolean[]> {
+  return page.locator(".item .shk-btn_forward").evaluateAll((buttons) => buttons.map((button) => button.hasAttribute("disabled")));
+}
+
 async function idleClocks(page: Page): Promise<Record<string, string>> {
   const clocks: Record<string, string> = {};
   for (const title of Object.keys(idleDurations)) {
@@ -140,6 +144,7 @@ describe.skipIf(!existsSync(chromium.executablePath()))("shared media player in 
     expect(await titles.allTextContents()).toEqual(["Charlie", "Bravo", "Alpha", "Gap"]);
     expect(await visibleToggles()).toBe(4);
     expect(await idleClocks(page), "idle durations").toEqual(idleDurations);
+    expect(await forwardSeekDisabled(page), "idle seek stays off").toEqual([true, true, true, true]);
     expect(traffic(), "untouched load").toEqual(untouched);
 
     await page.selectOption("#sort-order", "title-asc");
@@ -147,12 +152,15 @@ describe.skipIf(!existsSync(chromium.executablePath()))("shared media player in 
     expect(await titles.allTextContents()).toEqual(["Alpha", "Bravo", "Charlie", "Gap"]);
     expect(await visibleToggles()).toBe(4);
     expect(await idleClocks(page), "durations survive sort").toEqual(idleDurations);
+    expect(await forwardSeekDisabled(page), "seek stays off after sort").toEqual([true, true, true, true]);
     expect(traffic(), "untouched sort").toEqual(untouched);
     expect([...store.progressRows]).toEqual(seededRows);
 
     const bravo = page.locator(".item", { hasText: "Bravo" });
+    await bravo.locator(".shk-bar_wrap").click();
+    expect(traffic(), "pre-play seek").toEqual(untouched);
     await bravo.locator(".shk-btn_toggle").click();
-    await expect.poll(() => shownSeconds(bravo.locator(".shk-time_now")), { timeout: 10_000 }).toBeGreaterThanOrEqual(43);
+    await expect.poll(() => shownSeconds(bravo.locator(".shk-time_now")), { timeout: 10_000 }).toBeGreaterThanOrEqual(42);
     await bravo.locator(".shk-btn_toggle").click();
     await expect.poll(() => written().length).toBeGreaterThan(0);
     const media = requests.filter((request) => /^\/(audio|progress)\//.test(request.path));

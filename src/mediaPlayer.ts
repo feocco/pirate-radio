@@ -129,7 +129,6 @@ export function renderMediaPlayerClient(userId?: string): string {
       const artist = escapePlayerText(track.sourceName);
       const cover = trustedCoverUrl(track.coverUrl) ?? null;
       const eager = mode === "article";
-      const durationSeconds = playableDuration(track.durationSeconds);
       const player = new Player({
         container,
         fixed: { type: "static" },
@@ -142,12 +141,14 @@ export function renderMediaPlayerClient(userId?: string): string {
           artist,
           cover,
           src: track.audioUrl,
-          ...(durationSeconds === undefined ? {} : { duration: durationSeconds }),
         },
       });
-      if (durationSeconds === undefined) {
-        // Shikwasa replaces this label on durationchange after the file loads.
+      // Shikwasa replaces either label on durationchange after the file loads.
+      // Passing audio.duration would mark the card seekable before that metadata arrives.
+      if (track.durationSeconds === undefined) {
         container.querySelector(".shk-time_duration").textContent = "--:--";
+      } else {
+        player.ui.setTime("duration", track.durationSeconds);
       }
       const audio = player.audio;
       audio.disableRemotePlayback = false;

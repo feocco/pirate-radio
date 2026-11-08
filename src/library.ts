@@ -230,7 +230,7 @@ async function backfillLibraryDurationsLocked(libraryDir: string): Promise<Libra
 
 async function durationFromAudio(audioPath: string): Promise<number | undefined> {
   try {
-    const metadata = await parseFile(audioPath, { duration: true, skipCovers: true });
+    const metadata = await parseFile(audioPath, { skipCovers: true });
     return playableDurationSeconds(metadata.format.duration);
   } catch {
     // One bad file stays duration-less. It must not fail the manifest write.
