@@ -1,10 +1,11 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { chromium, type Browser, type Locator } from "playwright";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromium, type Browser, type Locator, type Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { PirateRadioConfig } from "../src/config.js";
 import { appendLibraryItem } from "../src/library.js";
@@ -12,17 +13,45 @@ import { createPirateRadioRequestHandler } from "../src/server.js";
 import { FakeAuthenticator, MemoryStore, adminUser } from "./support/fakes.js";
 
 const QUIET_MS = 3_000;
+const seedAudioDir = join(dirname(fileURLToPath(import.meta.url)), "../scripts/dev/seed-assets/audio");
 
-function silentMp3(seconds: number): Buffer {
-  // MPEG-1 Layer III, 32 kbps, 44.1 kHz, mono. Zeroed side info decodes as silence.
-  const frame = Buffer.alloc(104);
-  frame.set([0xff, 0xfb, 0x10, 0xc4]);
-  return Buffer.concat(Array.from({ length: Math.ceil((seconds * 44_100) / 1_152) }, () => frame));
-}
+// Shikwasa rounds with Math.round, so 58.320, 47.448, and 44.568 seconds display as 00:58, 00:47, and 00:45.
+const knownClips = [
+  ["Alpha", "notes-on-shipping-audio.mp3"],
+  ["Bravo", "regulators-discover-the-data-center.mp3"],
+  ["Charlie", "return-of-the-generalist-engineer.mp3"],
+] as const;
+
+const idleDurations = {
+  Charlie: "00:00 / 00:58",
+  Bravo: "00:00 / 00:47",
+  Alpha: "00:00 / 00:45",
+  Gap: "00:00 / --:--",
+};
 
 async function shownSeconds(time: Locator): Promise<number> {
   const [minutes, seconds] = (await time.textContent())!.split(":").map(Number);
   return minutes * 60 + seconds;
+}
+
+async function cardClock(card: Locator): Promise<string> {
+  return card.locator(".shk-time").evaluate((node) => {
+    const now = node.querySelector(".shk-time_now")?.textContent ?? "";
+    const durationEl = node.querySelector(".shk-time_duration");
+    const duration = durationEl?.textContent ?? "";
+    const mark = durationEl
+      ? getComputedStyle(durationEl, "::before").content.replace(/^["']|["']$/g, "")
+      : "none";
+    return mark && mark !== "none" ? `${now} ${mark} ${duration}` : `${now}${duration}`;
+  });
+}
+
+async function idleClocks(page: Page): Promise<Record<string, string>> {
+  const clocks: Record<string, string> = {};
+  for (const title of Object.keys(idleDurations)) {
+    clocks[title] = await cardClock(page.locator(".item", { has: page.locator("h2", { hasText: title }) }));
+  }
+  return clocks;
 }
 
 describe.skipIf(!existsSync(chromium.executablePath()))("shared media player in Chromium", () => {
@@ -35,10 +64,10 @@ describe.skipIf(!existsSync(chromium.executablePath()))("shared media player in 
   beforeAll(async () => {
     libraryDir = await mkdtemp(join(tmpdir(), "pirate-radio-player-"));
     for (const dir of ["audio", "stories", "alignment"]) await mkdir(join(libraryDir, dir));
-    for (const [index, title] of ["Alpha", "Bravo", "Charlie"].entries()) {
+    for (const [index, [title, audioFile]] of knownClips.entries()) {
       const slug = title.toLowerCase();
       const path = (dir: string, extension: string) => join(libraryDir, dir, `${slug}.${extension}`);
-      await writeFile(path("audio", "mp3"), silentMp3(60));
+      await copyFile(join(seedAudioDir, audioFile), path("audio", "mp3"));
       await writeFile(path("stories", "json"), JSON.stringify({ title, text: "Body." }));
       await writeFile(path("alignment", "json"), JSON.stringify({ words: [] }));
       await appendLibraryItem(libraryDir, {
@@ -49,6 +78,15 @@ describe.skipIf(!existsSync(chromium.executablePath()))("shared media player in 
         estimatedCostUsd: 0, wordCount: 1, characterCount: 5,
       });
     }
+    const gapAudioPath = join(libraryDir, "audio", "gap.mp3");
+    await writeFile(gapAudioPath, "not an mp3");
+    await appendLibraryItem(libraryDir, {
+      slug: "gap", title: "Gap", sourceName: "Fixture", sourceUrl: "https://example.com/gap",
+      audioPath: gapAudioPath, jsonPath: join(libraryDir, "stories", "gap.json"),
+      textPath: join(libraryDir, "text", "gap.txt"),
+      publishedAt: "", generatedAt: "2025-12-31T00:00:00.000Z",
+      estimatedCostUsd: 0, wordCount: 1, characterCount: 5,
+    });
     store.progressRows.set(`${adminUser.id}:alpha`, { positionSeconds: 20, durationSeconds: 60, updatedAt: "2026-01-04T00:00:00.000Z" });
     store.progressRows.set(`${adminUser.id}:bravo`, { positionSeconds: 42, durationSeconds: 60, updatedAt: "2026-01-04T00:00:00.000Z" });
     const config = {
@@ -68,7 +106,7 @@ describe.skipIf(!existsSync(chromium.executablePath()))("shared media player in 
   });
 
   async function open(path: string) {
-    const page = await browser.newPage();
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     const requests: Array<{ method: string; path: string; body: string | null }> = [];
     const errors: Error[] = [];
     page.on("request", (request) => {
@@ -83,7 +121,7 @@ describe.skipIf(!existsSync(chromium.executablePath()))("shared media player in 
     return { page, requests, errors, hits, written };
   }
 
-  test("untouched cards stay off the network and one played card resumes, then saves", { timeout: 40_000 }, async () => {
+  test("untouched cards show their durations without audio requests, and one played card resumes, then saves", { timeout: 40_000 }, async () => {
     const { page, requests, errors, hits, written } = await open("/");
     const toggles = page.locator(".item .shk-btn_toggle");
     const titles = page.locator(".item h2");
@@ -97,16 +135,18 @@ describe.skipIf(!existsSync(chromium.executablePath()))("shared media player in 
     const untouched = { manifest: 1, audio: 0, reads: 0, writes: 0 };
     const seededRows = structuredClone([...store.progressRows]);
 
-    await toggles.nth(2).waitFor();
+    await toggles.nth(3).waitFor();
     await page.waitForTimeout(QUIET_MS);
-    expect(await titles.allTextContents()).toEqual(["Charlie", "Bravo", "Alpha"]);
-    expect(await visibleToggles()).toBe(3);
+    expect(await titles.allTextContents()).toEqual(["Charlie", "Bravo", "Alpha", "Gap"]);
+    expect(await visibleToggles()).toBe(4);
+    expect(await idleClocks(page), "idle durations").toEqual(idleDurations);
     expect(traffic(), "untouched load").toEqual(untouched);
 
     await page.selectOption("#sort-order", "title-asc");
     await page.waitForTimeout(QUIET_MS);
-    expect(await titles.allTextContents()).toEqual(["Alpha", "Bravo", "Charlie"]);
-    expect(await visibleToggles()).toBe(3);
+    expect(await titles.allTextContents()).toEqual(["Alpha", "Bravo", "Charlie", "Gap"]);
+    expect(await visibleToggles()).toBe(4);
+    expect(await idleClocks(page), "durations survive sort").toEqual(idleDurations);
     expect(traffic(), "untouched sort").toEqual(untouched);
     expect([...store.progressRows]).toEqual(seededRows);
 
