@@ -8,6 +8,7 @@ COPY src ./src
 COPY tests ./tests
 COPY .cursor/skills/verify-pirate-radio/verify.sh .cursor/skills/verify-pirate-radio/verify.sh
 COPY scripts/dev/*.sh ./scripts/dev/
+COPY scripts/dev/seed-assets/audio ./scripts/dev/seed-assets/audio
 COPY scripts/parsers ./scripts/parsers
 RUN npm test && npm run build
 
