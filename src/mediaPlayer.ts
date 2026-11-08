@@ -1,4 +1,4 @@
-import type { LibraryItem } from "./library.js";
+import { playableDurationSeconds, type LibraryItem } from "./library.js";
 import { CastPlayback } from "./mediaPlayerCast.js";
 import { ACCENT } from "./theme.js";
 
@@ -8,6 +8,7 @@ export interface MediaPlayerTrack {
   sourceName: string;
   audioUrl: string;
   coverUrl?: string;
+  durationSeconds?: number;
 }
 
 export function mediaPlayerTrack(item: LibraryItem): MediaPlayerTrack {
@@ -17,6 +18,8 @@ export function mediaPlayerTrack(item: LibraryItem): MediaPlayerTrack {
     sourceName: item.sourceName || "Unknown Source",
     audioUrl: item.audioUrl,
   };
+  const durationSeconds = playableDurationSeconds(item.durationSeconds);
+  if (durationSeconds !== undefined) track.durationSeconds = durationSeconds;
   if (typeof item.imageUrl === "string" && item.imageUrl.startsWith("/images/")) {
     track.coverUrl = item.imageUrl;
   }
@@ -57,6 +60,10 @@ export function renderMediaPlayerClient(userId?: string): string {
       return typeof url === "string" && url.startsWith("/images/") ? url : undefined;
     }
 
+    function playableDuration(value) {
+      return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+    }
+
     function mediaPlayerTrack(item) {
       const track = {
         slug: item.slug,
@@ -66,6 +73,8 @@ export function renderMediaPlayerClient(userId?: string): string {
       };
       const coverUrl = trustedCoverUrl(item.imageUrl);
       if (coverUrl) track.coverUrl = coverUrl;
+      const durationSeconds = playableDuration(item.durationSeconds);
+      if (durationSeconds !== undefined) track.durationSeconds = durationSeconds;
       return track;
     }
 
@@ -134,6 +143,13 @@ export function renderMediaPlayerClient(userId?: string): string {
           src: track.audioUrl,
         },
       });
+      // Shikwasa replaces either label on durationchange after the file loads.
+      // Passing audio.duration would mark the card seekable before that metadata arrives.
+      if (track.durationSeconds === undefined) {
+        container.querySelector(".shk-time_duration").textContent = "--:--";
+      } else {
+        player.ui.setTime("duration", track.durationSeconds);
+      }
       const audio = player.audio;
       audio.disableRemotePlayback = false;
       ${CastPlayback.toString()}

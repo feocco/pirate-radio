@@ -1,5 +1,6 @@
 import { copyFile, mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { parseFile } from "music-metadata";
 
 export interface LibraryItem {
   slug: string;
@@ -26,6 +27,7 @@ export interface LibraryItem {
   wordCount: number;
   characterCount: number;
   audioBytes: number;
+  durationSeconds?: number;
 }
 
 export interface LibraryManifest {
@@ -43,7 +45,12 @@ export interface ArchivedLibraryItem {
   retainedOriginalFiles: string[];
 }
 
-export type NewLibraryItem = Omit<LibraryItem, "audioUrl" | "audioBytes">;
+export type NewLibraryItem = Omit<LibraryItem, "audioUrl" | "audioBytes" | "durationSeconds">;
+
+export function playableDurationSeconds(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
 const manifestWriteQueues = new Map<string, Promise<unknown>>();
 
 export async function readLibraryManifest(libraryDir: string): Promise<LibraryManifest> {
@@ -62,6 +69,10 @@ export async function appendLibraryItem(
   item: NewLibraryItem,
 ): Promise<LibraryManifest> {
   return queueManifestWrite(libraryDir, () => appendLibraryItemLocked(libraryDir, item));
+}
+
+export async function backfillLibraryDurations(libraryDir: string): Promise<LibraryManifest> {
+  return queueManifestWrite(libraryDir, () => backfillLibraryDurationsLocked(libraryDir));
 }
 
 export async function archiveLibraryItem(
@@ -92,11 +103,14 @@ async function appendLibraryItemLocked(
   await mkdir(libraryDir, { recursive: true });
   const manifest = await readLibraryManifest(libraryDir);
   const audioBytes = (await stat(item.audioPath)).size;
+  const durationSeconds = await durationFromAudio(item.audioPath);
   const nextItem: LibraryItem = {
     ...item,
     audioUrl: `/audio/${basename(item.audioPath)}`,
     audioBytes,
   };
+  if (durationSeconds === undefined) delete nextItem.durationSeconds;
+  else nextItem.durationSeconds = durationSeconds;
   const items = [nextItem, ...manifest.items.filter((existing) => existing.slug !== item.slug)];
   const nextManifest: LibraryManifest = {
     version: 1,
@@ -178,6 +192,50 @@ async function archiveLibraryItemLocked(
   }
 
   return { item, deletedAt, deletedByUsername, archiveDir, archivedFiles, retainedOriginalFiles };
+}
+
+async function backfillLibraryDurationsLocked(libraryDir: string): Promise<LibraryManifest> {
+  const manifest = await readLibraryManifest(libraryDir);
+  let changed = false;
+  const items: LibraryItem[] = [];
+  for (const item of manifest.items) {
+    if (playableDurationSeconds(item.durationSeconds) !== undefined) {
+      items.push(item);
+      continue;
+    }
+    const durationSeconds = await durationFromAudio(item.audioPath);
+    if (durationSeconds === undefined) {
+      if (!Object.hasOwn(item, "durationSeconds")) {
+        items.push(item);
+        continue;
+      }
+      const nextItem = { ...item };
+      delete nextItem.durationSeconds;
+      items.push(nextItem);
+      changed = true;
+      continue;
+    }
+    items.push({ ...item, durationSeconds });
+    changed = true;
+  }
+  if (!changed) return manifest;
+  const nextManifest: LibraryManifest = {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    items,
+  };
+  await writeManifest(libraryDir, nextManifest);
+  return nextManifest;
+}
+
+async function durationFromAudio(audioPath: string): Promise<number | undefined> {
+  try {
+    const metadata = await parseFile(audioPath, { skipCovers: true });
+    return playableDurationSeconds(metadata.format.duration);
+  } catch {
+    // One bad file stays duration-less. It must not fail the manifest write.
+    return undefined;
+  }
 }
 
 function libraryRelativePath(libraryRoot: string, path: string): string {

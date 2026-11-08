@@ -1,9 +1,12 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
-import { appendLibraryItem, archiveLibraryItem, readLibraryManifest } from "../src/library.js";
+import { appendLibraryItem, archiveLibraryItem, backfillLibraryDurations, manifestPath, readLibraryManifest } from "../src/library.js";
 import { filterVoiceExcludedLibraryManifest } from "../src/articleFilters.js";
+
+const knownAudio = join(dirname(fileURLToPath(import.meta.url)), "../scripts/dev/seed-assets/audio/notes-on-shipping-audio.mp3");
 
 let tempDir: string | undefined;
 
@@ -187,5 +190,132 @@ describe("library manifest", () => {
     expect(manifest.items[0].sectionTitles).toEqual(["American Industrialization Redux"]);
     expect(rawManifest.length).toBeLessThan(2000);
     expect(rawManifest).not.toContain(Buffer.alloc(16, 1).toString("base64"));
+    expect(manifest.items[0]?.durationSeconds).toBeUndefined();
+  });
+
+  test("persists duration from the MP3 and omits it when the file has none", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-library-"));
+    const knownPath = join(tempDir, "audio", "known.mp3");
+    const corruptPath = join(tempDir, "audio", "corrupt.mp3");
+    await mkdir(join(tempDir, "audio"), { recursive: true });
+    await copyFile(knownAudio, knownPath);
+    await writeFile(corruptPath, "not an mp3");
+
+    const knownInput = { ...itemFields("known", knownPath), durationSeconds: 1 };
+    const corruptInput = { ...itemFields("corrupt", corruptPath), durationSeconds: 99 };
+    await appendLibraryItem(tempDir, knownInput);
+    await appendLibraryItem(tempDir, corruptInput);
+
+    const manifest = await readLibraryManifest(tempDir);
+    const known = manifest.items.find((item) => item.slug === "known");
+    const corrupt = manifest.items.find((item) => item.slug === "corrupt");
+    expect(known?.durationSeconds).toBe(44.568);
+    expect(corrupt).not.toHaveProperty("durationSeconds");
   });
 });
+
+describe("legacy duration backfill", () => {
+  test("fills only missing or invalid durations and writes once", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-library-"));
+    const knownPath = join(tempDir, "audio", "known.mp3");
+    const corruptPath = join(tempDir, "audio", "corrupt.mp3");
+    const missingPath = join(tempDir, "audio", "missing.mp3");
+    await mkdir(join(tempDir, "audio"), { recursive: true });
+    await copyFile(knownAudio, knownPath);
+    await writeFile(corruptPath, "not an mp3");
+    const legacy = {
+      version: 1,
+      updatedAt: "2020-01-01T00:00:00.000Z",
+      items: [
+        storedItem("known", knownPath),
+        storedItem("invalid", knownPath, { durationSeconds: 0 }),
+        storedItem("corrupt", corruptPath, { durationSeconds: -3 }),
+        storedItem("missing", missingPath, { durationSeconds: null }),
+        storedItem("kept", missingPath, { durationSeconds: 12.5 }),
+      ],
+    };
+    await writeFile(manifestPath(tempDir), `${JSON.stringify(legacy, null, 2)}\n`);
+
+    const filled = await backfillLibraryDurations(tempDir);
+    expect(filled.items.find((item) => item.slug === "known")?.durationSeconds).toBe(44.568);
+    expect(filled.items.find((item) => item.slug === "invalid")?.durationSeconds).toBe(44.568);
+    expect(filled.items.find((item) => item.slug === "corrupt")).not.toHaveProperty("durationSeconds");
+    expect(filled.items.find((item) => item.slug === "missing")).not.toHaveProperty("durationSeconds");
+    expect(filled.items.find((item) => item.slug === "kept")?.durationSeconds).toBe(12.5);
+    expect(filled.updatedAt).not.toBe(legacy.updatedAt);
+
+    const written = await readFile(manifestPath(tempDir), "utf8");
+    await backfillLibraryDurations(tempDir);
+    expect(await readFile(manifestPath(tempDir), "utf8")).toBe(written);
+
+    const finished = {
+      version: 1,
+      updatedAt: "2021-01-01T00:00:00.000Z",
+      items: [storedItem("kept", missingPath, { durationSeconds: 12.5 })],
+    };
+    await writeFile(manifestPath(tempDir), `${JSON.stringify(finished, null, 2)}\n`);
+    const before = await readFile(manifestPath(tempDir), "utf8");
+    await backfillLibraryDurations(tempDir);
+    expect(await readFile(manifestPath(tempDir), "utf8")).toBe(before);
+  });
+
+  test("keeps rows from a backfill that overlaps an append", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-library-"));
+    const knownPath = join(tempDir, "audio", "known.mp3");
+    const addedPath = join(tempDir, "audio", "added.mp3");
+    await mkdir(join(tempDir, "audio"), { recursive: true });
+    await copyFile(knownAudio, knownPath);
+    await copyFile(knownAudio, addedPath);
+    await writeFile(manifestPath(tempDir), `${JSON.stringify({
+      version: 1,
+      updatedAt: "2020-01-01T00:00:00.000Z",
+      items: [storedItem("known", knownPath)],
+    }, null, 2)}\n`);
+
+    await Promise.all([
+      backfillLibraryDurations(tempDir),
+      appendLibraryItem(tempDir, itemFields("added", addedPath)),
+    ]);
+
+    const items = (await readLibraryManifest(tempDir)).items;
+    expect(items.map((item) => item.slug).sort()).toEqual(["added", "known"]);
+    expect(items.find((item) => item.slug === "known")?.durationSeconds).toBe(44.568);
+    expect(items.find((item) => item.slug === "added")?.durationSeconds).toBe(44.568);
+  });
+
+  test("reading a manifest does not create or rewrite it", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pirate-library-"));
+    await expect(readLibraryManifest(tempDir)).resolves.toMatchObject({ items: [] });
+    await expect(stat(manifestPath(tempDir))).rejects.toMatchObject({ code: "ENOENT" });
+
+    await writeFile(manifestPath(tempDir), `${JSON.stringify({ version: 1, updatedAt: "2020-01-01T00:00:00.000Z", items: [] }, null, 2)}\n`);
+    const before = await readFile(manifestPath(tempDir), "utf8");
+    await readLibraryManifest(tempDir);
+    expect(await readFile(manifestPath(tempDir), "utf8")).toBe(before);
+  });
+});
+
+function itemFields(slug: string, audioPath: string) {
+  return {
+    slug,
+    title: slug,
+    sourceUrl: `https://example.com/${slug}`,
+    audioPath,
+    jsonPath: join(tempDir!, "stories", `${slug}.json`),
+    textPath: join(tempDir!, "text", `${slug}.txt`),
+    publishedAt: "",
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    estimatedCostUsd: 0,
+    wordCount: 1,
+    characterCount: 1,
+  };
+}
+
+function storedItem(slug: string, audioPath: string, extra: Record<string, unknown> = {}) {
+  return {
+    ...itemFields(slug, audioPath),
+    audioUrl: `/audio/${slug}.mp3`,
+    audioBytes: 1,
+    ...extra,
+  };
+}

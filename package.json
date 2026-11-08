@@ -27,6 +27,7 @@
     "domhandler": "^6.0.1",
     "domutils": "^4.0.2",
     "htmlparser2": "^12.0.0",
+    "music-metadata": "^12.3.5",
     "openid-client": "^6.8.4",
     "pg": "^8.22.0",
     "playwright": "^1.60.0",
