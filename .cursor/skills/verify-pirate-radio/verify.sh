@@ -415,32 +415,20 @@ cleanup() {
   kill_matching "$serve_pid" "cli.js serve" "PIRATE_RADIO_DEV_DIR=$dev_dir"
   kill_matching "$oidc_pid" "local-oidc.mjs" "PIRATE_RADIO_DEV_DIR=$dev_dir"
   assert_verify_db_name "$database_name"
-  # A launch writes the record before any process exists. If that launch dies
-  # before the pids are real, drop failure must not leave the dead record behind.
-  if [ "$oidc_pid" = "0" ] && [ "$serve_pid" = "0" ]; then
-    local db_status=0
-    terminate_verify_db "$database_name" || db_status=$?
-    sudo -u postgres dropdb --if-exists -- "$database_name" || db_status=$?
-    rm -rf "$dev_dir"
-    rm -f "$STATE"
-    if [ ! -d "$evidence_dir" ]; then
-      echo "evidence dir missing after cleanup: $evidence_dir" >&2
-      exit 1
-    fi
-    if [ "$db_status" -ne 0 ]; then
-      echo "cleanup removed an unstarted stack but could not drop $database_name" >&2
-      exit "$db_status"
-    fi
-    echo "cleanup removed an unstarted stack. evidence remains at $evidence_dir"
-    exit 0
-  fi
-  terminate_verify_db "$database_name"
-  sudo -u postgres dropdb --if-exists -- "$database_name"
+  # The recorded pids are gone now. Keeping the record after a failed drop
+  # makes launch refuse and points drive at a dead port.
+  local db_status=0
+  terminate_verify_db "$database_name" || db_status=$?
+  sudo -u postgres dropdb --if-exists -- "$database_name" || db_status=$?
   rm -rf "$dev_dir"
   rm -f "$STATE"
   if [ ! -d "$evidence_dir" ]; then
     echo "evidence dir missing after cleanup: $evidence_dir" >&2
     exit 1
+  fi
+  if [ "$db_status" -ne 0 ]; then
+    echo "cleanup removed the stack record but could not drop $database_name" >&2
+    exit "$db_status"
   fi
   echo "cleanup done. evidence remains at $evidence_dir"
 }
