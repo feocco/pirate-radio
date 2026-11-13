@@ -3,6 +3,7 @@ import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, onTestFinished, test, vi } from "vitest";
+import type { Authenticator } from "../src/auth.js";
 import type { PirateRadioConfig } from "../src/config.js";
 import type { CreateSubmissionInput, PirateRadioDatabase } from "../src/database.js";
 import type { PirateArticle } from "../src/feed.js";
@@ -379,9 +380,32 @@ describe("runtime reliability reproduction", () => {
       expect(errors).toHaveBeenCalledWith("[pirate-radio] poll failed", reason);
     });
   });
+
+  test("a request that fails before writing headers answers 500 internal_error", async () => {
+    const authenticator = new FakeAuthenticator();
+    authenticator.authenticate = async () => {
+      throw new Error("session store unavailable");
+    };
+    const { service, fetchArticleFeeds } = await pollService(authenticator);
+    fetchArticleFeeds.mockResolvedValueOnce([]);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    onTestFinished(() => errors.mockRestore());
+
+    await service.start();
+    const server = harness.servers.at(-1)!;
+    await vi.waitFor(() => expect(server.listening).toBe(true));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Expected TCP server address");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    expect((await fetch(`${baseUrl}/health`)).status).toBe(200);
+    const failed = await fetch(`${baseUrl}/library.json`);
+    expect(failed.status).toBe(500);
+    expect(await failed.json()).toEqual({ error: "internal_error" });
+  });
 });
 
-async function pollService() {
+async function pollService(authenticator: Authenticator = new FakeAuthenticator()) {
   const dir = await mkdtemp(join(tmpdir(), "pirate-poll-"));
   const intervals = vi
     .spyOn(globalThis, "setInterval")
@@ -396,7 +420,7 @@ async function pollService() {
   const service = new PirateRadioService({
     config: reliabilityConfig(dir),
     database: new RuntimeStore() as unknown as PirateRadioDatabase,
-    authenticator: new FakeAuthenticator(),
+    authenticator,
     notifier: { send: async () => {} },
   });
   return { service, intervals, fetchArticleFeeds };
