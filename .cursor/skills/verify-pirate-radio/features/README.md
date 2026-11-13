@@ -17,10 +17,10 @@ This directory is the maintained source for verifying Pirate Radio. Read this in
 - Start every seeded recipe from the baseline state.
 - Prefer the role and accessible name in the feature file over a CSS-only guess. The ids below are the ones the pages already expose: `#article-url`, `#queue-url`, `#library`, `#story-body`, `#article-player`, `#account-menu`.
 - Treat commands as literal.
-- Browser drives go through `node .cursor/skills/verify-pirate-radio/drive.mjs <step>`.
+- Browser drives go through `npm run verify:drive -- <step>`. With a recorded stack it only drives. With none, it launches, drives, and cleans up.
 - HTTP checks use `curl` against the state file's `publicUrl`.
 - Queue conversion goes through `npm run qa`, which boots a second, hermetic stack.
-- Parser criteria go through `npx vitest run tests/first-things-criteria.test.ts`.
+- Parser criteria go through `npm test -- tests/first-things-criteria.test.ts`.
 - Cleanup may remove the scratch database and `/tmp` directory. It must not remove proof files.
 
 ## Proof and skip reporting

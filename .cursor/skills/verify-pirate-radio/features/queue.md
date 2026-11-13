@@ -22,7 +22,7 @@ Preconditions:
 - For the scratch page, doctor prints `doctor ok` and the issuer feed is the only configured feed.
 - For conversion, Postgres has `pirate_radio_qa` from `bash scripts/dev/start.sh`. Stop if a QA run is already using that database.
 
-- **Open the queue.** Run `node .cursor/skills/verify-pirate-radio/drive.mjs queue`. The script signs in, chooses `Queue`, and waits for `#article-url`.
+- **Open the queue.** Run `npm run verify:drive -- queue`. The script signs in, chooses `Queue`, and waits for `#article-url`.
 - **See the form.** `#queue-url` reads `Convert URL`. `#custom-title` and `#queue-text` are visible. The script does not fill or submit either form.
 - **See the fixture row.** A `queue-row` heading reads `Inside Micron's Attempts` and that row has a `Convert` button. `Monday: Three Morning Takes` is absent because the voice filter drops it.
 - **See seeded history.** `#submissions` contains `The Quiet Return of the Generalist Engineer`, `succeeded`, and `demo.reader`.

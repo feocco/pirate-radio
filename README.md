@@ -123,7 +123,7 @@ article hero image URL.
 X Articles use the official X Post lookup API and require
 `X_API_BEARER_TOKEN`; the public X page is not scraped.
 Unsupported `https` article URLs require `CURSOR_API_KEY` and launch a Cursor
-Cloud Agent against `feocco/pirate-radio` that writes `artifacts/story.json`.
+Cloud Agent against `feocco/pirate-radio` that writes artifacts/story.json in that agent's workspace.
 That extract agent does not open a pull request. Optional
 `--first-sentence` and `--last-sentence` pin the extract to inclusive anchors.
 A successful cloud extract records the host fingerprint in
@@ -142,7 +142,7 @@ Admins can send the same request from `/admin` to `POST /admin/propose-adapter`.
 From an existing JSON file:
 
 ```bash
-npm run cli -- speak output/json/story-slug.json --provider xai
+npm run cli -- speak output/json/<slug>.json --provider xai
 ```
 
 Extract and generate audio in one command:

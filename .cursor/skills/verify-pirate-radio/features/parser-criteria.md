@@ -22,7 +22,7 @@ Preconditions:
 - `src/parsers/domains/first-things/parser.json` is absent. That is the current tree, not a missing download.
 - No scratch server is required.
 
-- **Run the criteria.** From the repo root, run `npx vitest run tests/first-things-criteria.test.ts`. The process exits `0`.
+- **Run the criteria.** Run `npm test -- tests/first-things-criteria.test.ts`. npm uses the package root, so the working directory can be the repo root or this skill directory. The process exits `0`.
 - **Title and words.** The test requires the title `Voyages to the End of the World`, the opening words `Francis Bacon dreamed of abolishing`, and the closing words `have faith that he will.`
 - **Phrases.** The ordered phrases are `might warn off potential invaders.` and `confronting a dragon representing Satan`.
 - **Redaction.** The fixture is under 2000 bytes, contains no `<script` and no `javascript:`, and the parsed words stay inside the pinned set plus the filler `redacted`.

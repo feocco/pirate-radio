@@ -173,7 +173,7 @@ the matching private `homelab-config` registration separately.
   `src/mediaPlayer.ts` player with a loaded duration. A second test pins the
   bot-auth contract above.
 - QA never calls real xAI or any external host. `tests/qa/network-stub.mjs` is
-  a dev-only `node --import` preload. It refuses to load unless
+  a dev-only preload passed through Node's `--import` flag. It refuses to load unless
   `PIRATE_RADIO_DEV_STACK=1` and `NODE_ENV` is not `production`. It routes the
   fixture origin and `https://api.x.ai` to loopback mocks and rejects every
   other non-loopback request. `serve` gets a scrubbed environment, with
@@ -182,7 +182,7 @@ the matching private `homelab-config` registration separately.
   real `XAI_API_KEY` as a runtime secret in `homelab-config`. Any CI that runs
   real TTS needs it as a repository secret. `npm test` and `npm run qa`
   require neither.
-- Results go to `output/qa/test-results/` (gitignored). Every run saves a
+- Results go to the gitignored output/qa/test-results directory. Every run saves a
   full-page `reader-article.png`. `PIRATE_RADIO_QA_EVIDENCE=1 npm run qa`
   also records a trace and a video for each test, slowed by `slowMo` so they
   are watchable. The global teardown (`tests/qa/redact-traces.ts`) redacts
@@ -226,10 +226,10 @@ Bot (see "Work policy" above).
    `ghcr.io/feocco/pirate-radio:latest` and `:sha-<short>`. Pull requests do
    not publish images. A manual `workflow_dispatch` from another ref publishes
    only a `sha-` tag, because `latest` is limited to the default branch.
-2. `homelab-config` `services/pirate-radio/` owns runtime: Compose (pulls
+2. homelab-config owns runtime in its services/pirate-radio directory: Compose (pulls
    `:latest`, plus Postgres), non-secret `.env.config`, and the list of
    secrets rendered into the ignored runtime `.env` from GitHub Actions
-   secrets. The host registration is `hosts/macmini/services.yaml`.
+   secrets. The host registration in that repo is hosts/macmini/services.yaml.
 3. Rollout runs from `homelab-config`: its `Deploy` workflow (on push to its
    `main`, or dispatched for host `macmini` and service `pirate-radio`), or
    `scripts/redeploy-image --host macmini pirate-radio` on the host.
@@ -358,8 +358,8 @@ Durable gotchas and clarifications:
   (user) secret and no per-run TTS cost is incurred. Feed-sourced samples carry
   hero images; Custom Text intentionally has none. It is idempotent (skips slugs
   already in the manifest). To refresh the committed assets, regenerate the MP3s
-  with a key and re-commit them under `seed-assets/audio/` (and images under
-  `seed-assets/images/`).
+  with a key and re-commit them under `scripts/dev/seed-assets/audio/` (and images under
+  `scripts/dev/seed-assets/images/`).
 - Opt-in `PIRATE_RADIO_SEED_DYNAMIC=1` pulls recent live Substack-type articles
   via real extraction + xAI TTS (needs a key and feed egress; incurs cost and
   regenerates per run). Off by default.
