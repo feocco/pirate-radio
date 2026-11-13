@@ -225,6 +225,13 @@ describe("parseParserSpec", () => {
     expectIssue(expectSpecError(rawSpec({ hosts: ["a".repeat(254)] })), "hosts[0]", "253");
   });
 
+  test("accepts a single slash and a prefix at the length limit", () => {
+    expect(parseParserSpec(rawSpec({ paths: { prefixes: ["/"] } })).paths).toEqual({ prefixes: ["/"] });
+    const longest = `/${"a".repeat(parserSpecLimits.pathPrefixLength - 1)}`;
+    expect(longest.length).toBe(parserSpecLimits.pathPrefixLength);
+    expect(parseParserSpec(rawSpec({ paths: { prefixes: [longest] } })).paths).toEqual({ prefixes: [longest] });
+  });
+
   test("rejects path prefixes that are not site-relative paths", () => {
     expectIssue(expectSpecError(rawSpec({ paths: { prefixes: [] } })), "paths.prefixes", "at least 1");
     expectIssue(expectSpecError(rawSpec({ paths: { prefixes: ["news"] } })), "paths.prefixes[0]", "start with /");

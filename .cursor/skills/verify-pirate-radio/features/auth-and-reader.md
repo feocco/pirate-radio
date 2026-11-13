@@ -23,7 +23,7 @@ Preconditions:
 - Doctor prints `doctor ok`.
 - No browser is already signed in on a different host for this port. Use `http://localhost:<servicePort>` from the state file.
 
-- **Sign in.** Open `/` and choose `Sign in`. Run `node .cursor/skills/verify-pirate-radio/drive.mjs auth`. The browser lands on `$PUBLIC_URL/` and the library replaces `Loading...`.
+- **Sign in.** Open `/` and choose `Sign in`. Run `npm run verify:drive -- auth`. The browser lands on `$PUBLIC_URL/` and the library replaces `Loading...`.
 - **Session.** The script checks `GET /auth/me`. Status `200`. `username` is `demo.reader`, `isAdmin` is true, and `groups` includes `pirate-radio-users` and `pirate-radio-admins`. It writes `auth-me.json`.
 - **Seeded cards.** The same run shows headings `The Quiet Return of the Generalist Engineer`, `Regulators Discover the Data Center`, and `Notes on Shipping Software That Reads Itself Aloud`. The first two cards use an image. The custom-text card uses the placeholder thumb. `library.png` shows all three.
 - **Filter.** The script sets `Filter by source` to `Hyperdimensional` and requires the generalist heading to stay and the other two titles to leave. It then sets `All sources` and requires all three back.

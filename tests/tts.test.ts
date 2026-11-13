@@ -328,11 +328,11 @@ describe("XaiTtsProvider", () => {
 
   test("maps provider HTTP errors without leaking response bodies", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "pirate-xai-tts-"));
-    const secret = "secret-user-prompt-should-not-leak";
+    const providerBody = "fake-prompt-body-should-not-leak";
     const provider = new XaiTtsProvider({
       apiKey: "test-key",
       fetchImpl: async () =>
-        new Response(`${secret}${"x".repeat(400)}`, {
+        new Response(`${providerBody}${"x".repeat(400)}`, {
           status: 403,
           headers: { "Content-Type": "text/plain" },
         }),
@@ -349,7 +349,7 @@ describe("XaiTtsProvider", () => {
 
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toBe("xAI tts failed (403)");
-    expect((error as Error).message).not.toContain(secret);
+    expect((error as Error).message).not.toContain(providerBody);
   });
 
   test("advances timeOffset across a chunk that returns audio without timestamps", async () => {

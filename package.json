@@ -13,6 +13,7 @@
     "cli": "tsx src/cli.ts",
     "dev": "bash scripts/dev/up.sh",
     "qa": "npm run build && playwright test -c tests/qa",
+    "verify:drive": "bash .cursor/skills/verify-pirate-radio/drive-step.sh",
     "start": "node dist/src/cli.js serve",
     "pretest": "tsx scripts/parsers/generate-registry.ts",
     "test": "vitest run",

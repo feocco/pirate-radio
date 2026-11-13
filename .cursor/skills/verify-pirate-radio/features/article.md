@@ -23,7 +23,7 @@ Preconditions:
 - The scratch manifest contains `return-of-the-generalist-engineer` and `notes-on-shipping-audio`.
 - You are on the `localhost` origin from the state file.
 
-- **Open the article.** Run `node .cursor/skills/verify-pirate-radio/drive.mjs article`. The script signs in, chooses the generalist heading, and waits for the URL path `/article/return-of-the-generalist-engineer`.
+- **Open the article.** Run `npm run verify:drive -- article`. The script signs in, chooses the generalist heading, and waits for the URL path `/article/return-of-the-generalist-engineer`.
 - **Read the story.** The `h1` is `The Quiet Return of the Generalist Engineer`. The page shows `By Mara Whitfield`. `#story-body` contains `For a decade the industry rewarded specialization.`
 - **Hear the player.** `#article-player` shows `.shk-btn_toggle`. `.shk-time_duration` becomes something other than `00:00` or `00:00:00`. `GET /audio/return-of-the-generalist-engineer.mp3` returns `200` or `206`.
 - **Check progress.** `GET /progress/return-of-the-generalist-engineer` returns `positionSeconds` `100`, `durationSeconds` `100`, and a `completedAt` value. The script writes `progress.json`.

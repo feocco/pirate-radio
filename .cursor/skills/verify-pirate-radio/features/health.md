@@ -23,7 +23,7 @@ Preconditions:
 
 - **Liveness.** Request health with no cookie. Run `curl -fsS "$PUBLIC_URL/health"`. The body is `{"ok":true}` and the status is `200`.
 - **Locked library.** Request the manifest with no cookie. Run `curl -sS -w "\n%{http_code}\n" "$PUBLIC_URL/library.json"`. The status is `401` and the JSON `error` is `authentication_required`.
-- **Sign-in page.** Open `$PUBLIC_URL/` in the drive. Run `node .cursor/skills/verify-pirate-radio/drive.mjs health`. The script writes `health.json`, `library-locked.json`, and `sign-in.png` under the run's `evidenceDir`. The picture shows the heading `Pirate Radio` and a `Sign in` link.
+- **Sign-in page.** Open `$PUBLIC_URL/` in the drive. Run `npm run verify:drive -- health`. The script writes `health.json`, `library-locked.json`, and `sign-in.png` under the run's `evidenceDir`. The picture shows the heading `Pirate Radio` and a `Sign in` link.
 
 ## Gotchas
 
