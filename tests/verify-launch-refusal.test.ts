@@ -132,7 +132,12 @@ test("verify database names stay per-run and a second launch does not clean the 
   }
 });
 
-test("cleanup removes an unstarted stack when the database drop fails", () => {
+const unallocatablePid = Number(readFileSync("/proc/sys/kernel/pid_max", "utf8"));
+
+test.each([
+  ["an unstarted stack", { oidc: 0, serve: 0 }],
+  ["a stopped stack", { oidc: unallocatablePid, serve: unallocatablePid }],
+])("cleanup removes %s when the database drop fails", (_label, pids) => {
   const existing = readState();
   if (existing) throw new Error("output/qa/verify/state.json already exists. Refusing to touch a live verify run.");
 
@@ -156,7 +161,7 @@ test("cleanup removes an unstarted stack when the database drop fails", () => {
     libraryDir: join(scratch, "library"),
     devDir: scratch,
     databaseName: "pirate_radio_verify_sudofailcheck",
-    pids: { oidc: 0, serve: 0 },
+    pids,
     evidenceDir: evidence,
     startedAt: "2026-01-01T00:00:00Z",
   };
