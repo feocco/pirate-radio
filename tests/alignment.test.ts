@@ -49,7 +49,7 @@ describe("audio alignment", () => {
     await mkdir(join(tempDir, "audio"), { recursive: true });
     await writeFile(audioPath, Buffer.from("mock mp3"));
 
-    const secret = "secret-transcript-should-not-leak";
+    const providerBody = "fake-transcript-body-should-not-leak";
     const timeout = vi.spyOn(AbortSignal, "timeout");
     const originalFetch = globalThis.fetch;
     const originalKey = process.env.XAI_API_KEY;
@@ -57,7 +57,7 @@ describe("audio alignment", () => {
     globalThis.fetch = (async (url, init) => {
       expect(url).toBe("https://api.x.ai/v1/stt");
       expect(init?.signal).toBeInstanceOf(AbortSignal);
-      return new Response(`${secret}${"y".repeat(400)}`, { status: 503 });
+      return new Response(`${providerBody}${"y".repeat(400)}`, { status: 503 });
     }) as typeof fetch;
 
     try {
@@ -70,7 +70,7 @@ describe("audio alignment", () => {
       expect(timeout).toHaveBeenCalledWith(60_000);
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).toBe("xAI stt failed (503)");
-      expect((error as Error).message).not.toContain(secret);
+      expect((error as Error).message).not.toContain(providerBody);
     } finally {
       timeout.mockRestore();
       globalThis.fetch = originalFetch;
