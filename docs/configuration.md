@@ -30,6 +30,7 @@ The app reads configuration from environment variables.
 | `X_API_BEARER_TOKEN` | none | App-only X API bearer token required for pasted X Article conversions. |
 | `XAI_API_KEY` | none | Required for approved TTS generation. |
 | `CURSOR_API_KEY` | none | Cursor user or repository-scoped service-account key used by `src/cloudExtract.ts` to launch Cloud Agents against `feocco/pirate-radio` for unsupported article URLs. Extract does not open a PR. The extract wait fails closed after 10 minutes. |
+| `PIRATE_RADIO_CLOUD_MODEL` | `grok-4.7` | Model id passed to `Agent.create` for cloud extract and host-adapter agents. A blank value keeps `grok-4.7`. |
 | `HA_URL` | none | Home Assistant base URL. |
 | `HA_LONG_LIVED_TOKEN` | none | Home Assistant WebSocket token. |
 | `HOMELAB_FUNCTIONS_URL` | none | Notification broker URL. |

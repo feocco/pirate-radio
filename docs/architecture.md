@@ -49,6 +49,8 @@ login-required notification that opens the Tailnet-only reauth browser.
 - `src/cloudExtract.ts`: Cursor Cloud Agent extract for unknown hosts. The
   extract agent attaches `feocco/pirate-radio` so a repository-scoped
   `CURSOR_API_KEY` can create it, and it does not open a PR.
+  `Agent.create` receives model id `grok-4.7` unless `PIRATE_RADIO_CLOUD_MODEL`
+  sets another id. Host-adapter agents use the same id.
   The SDK client stays behind this module so the Cursor account can change
   without rewriting the queue.
 - `src/cloudHosts.ts`: durable `cloud-hosts.json` fingerprints after a

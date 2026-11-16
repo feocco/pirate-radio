@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, test, vi } from "vitest";
 import type { PirateRadioConfig } from "../src/config.js";
 import type { PirateRadioDatabase } from "../src/database.js";
+import { publicFailureReason } from "../src/notifications.js";
 import { FakeAuthenticator, MemoryStore } from "./support/fakes.js";
 
 const SOURCE_URL = "https://borretti.me/article/taking-ai-seriously";
@@ -72,6 +73,15 @@ afterAll(async () => {
   }
 });
 
+describe("public failure text", () => {
+  test("keeps a short validation message and drops a key from any other message", () => {
+    expect(publicFailureReason("Enter a valid URL.")).toBe("Enter a valid URL.");
+    expect(publicFailureReason(new Error("Could not read the article crsr_other_secret."))).toBe(
+      "Could not read the article.",
+    );
+  });
+});
+
 describe("failed URL conversion on the queue", () => {
   test("a cloud extract that hits the Cursor usage limit shows as Failed", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pirate-queue-failure-"));
@@ -128,10 +138,8 @@ describe("failed URL conversion on the queue", () => {
 
       const page = await fetch(`${baseUrl}/queue`);
       const html = await page.text();
-      const submissions = html.slice(
-        html.indexOf('id="submissions"'),
-        html.indexOf("<script>"),
-      );
+      const submissionsStart = html.indexOf('id="submissions"');
+      const submissions = html.slice(submissionsStart, html.indexOf("</main>", submissionsStart));
       expect(submissions).toContain("Failed");
       expect(submissions).toContain("Cursor usage limit reached");
       expect(submissions).not.toContain(SECRET_IN_CURSOR_ERROR);

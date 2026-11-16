@@ -1,5 +1,5 @@
 import type { LibraryItem } from "./library.js";
-import type { ApplicationUser } from "./identity.js";
+import type { ApplicationUser, Submission } from "./identity.js";
 import {
   mediaPlayerTrack,
   renderMediaPlayerAssets,
@@ -407,7 +407,40 @@ export function renderReaderHtml(user?: ApplicationUser, identitySettingsUrl?: s
 </html>`;
 }
 
-export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: string): string {
+export function submissionQueueText(item: Pick<Submission, "status" | "error">): string {
+  const label = submissionStatusLabel(item.status);
+  if (item.status === "failed" && item.error) return `${label}. ${item.error}`;
+  return label;
+}
+
+function submissionStatusLabel(status: Submission["status"] | string): string {
+  switch (status) {
+    case "failed":
+      return "Failed";
+    case "succeeded":
+      return "Succeeded";
+    case "processing":
+      return "Processing";
+    default:
+      return "Queued";
+  }
+}
+
+function renderSubmissionList(submissions: Submission[]): string {
+  if (submissions.length === 0) return "No submissions yet.";
+  return submissions.map((item) => {
+    const heading = item.title || item.slug || item.sourceUrl || "Submission";
+    const byline = item.submittedByUsername ? `by ${item.submittedByUsername}` : "Added automatically";
+    const meta = [item.type, submissionQueueText(item), byline, item.createdAt].join(" - ");
+    return `<section class="queue-row"><div><h2>${escapeHtml(heading)}</h2><div class="meta">${escapeHtml(meta)}</div></div></section>`;
+  }).join("");
+}
+
+export function renderBacklogHtml(
+  user?: ApplicationUser,
+  identitySettingsUrl?: string,
+  submissions: Submission[] = [],
+): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -453,7 +486,7 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
     <div class="kicker">Recent activity</div>
     <h2>Submissions</h2>
   </section>
-  <main id="submissions" class="queue-list wrap">Loading...</main>
+  <main id="submissions" class="queue-list wrap">${renderSubmissionList(submissions)}</main>
   <script>
     const pageSize = 10;
     const root = document.getElementById("queue");
@@ -478,6 +511,8 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
     let items = [];
     let pageIndex = 0;
     let pollTimer;
+    let submissionTimer;
+    let watchedUrlSlug = "";
 
     function normalize(value) {
       return String(value || "").toLowerCase();
@@ -560,8 +595,9 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
       const response = await fetch("/submissions.json", { cache: "no-store" });
       if (!response.ok) throw new Error("Could not load submissions");
       const payload = await response.json();
+      const list = Array.isArray(payload.items) ? payload.items : [];
       submissionsRoot.textContent = "";
-      for (const item of (Array.isArray(payload.items) ? payload.items : [])) {
+      for (const item of list) {
         const row = document.createElement("section");
         row.className = "queue-row";
         const label = document.createElement("div");
@@ -569,12 +605,29 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
         heading.textContent = item.title || item.slug || item.sourceUrl || "Submission";
         const meta = document.createElement("div");
         meta.className = "meta";
-        meta.textContent = [item.type, item.status, item.submittedByUsername ? "by " + item.submittedByUsername : "Added automatically", item.createdAt].join(" - ");
+        meta.textContent = [item.type, item.statusText || item.status, item.submittedByUsername ? "by " + item.submittedByUsername : "Added automatically", item.createdAt].join(" - ");
         label.append(heading, meta);
         row.append(label);
         submissionsRoot.append(row);
       }
       if (!submissionsRoot.children.length) submissionsRoot.textContent = "No submissions yet.";
+      if (watchedUrlSlug) {
+        const watched = list.find((item) => item.slug === watchedUrlSlug && item.type === "url");
+        if (watched && watched.status === "failed") {
+          urlStatus.className = "status error";
+          urlStatus.textContent = watched.statusText || "Failed";
+        }
+      }
+      scheduleSubmissionPolling(list);
+    }
+
+    function scheduleSubmissionPolling(list) {
+      clearInterval(submissionTimer);
+      if (list.some((item) => item.status === "queued" || item.status === "processing")) {
+        submissionTimer = setInterval(() => {
+          loadSubmissions().catch((error) => { submissionsRoot.textContent = error.message; });
+        }, 2000);
+      }
     }
 
     async function convertItem(slug, button) {
@@ -619,6 +672,8 @@ export function renderBacklogHtml(user?: ApplicationUser, identitySettingsUrl?: 
         } else {
           urlStatus.textContent = "Queued. You will get a notification when audio is ready.";
         }
+        watchedUrlSlug = payload.status === "queued" || payload.status === "processing" ? (payload.slug || "") : "";
+        loadSubmissions().catch((error) => { submissionsRoot.textContent = error.message; });
         articleUrl.value = "";
         firstSentence.value = "";
         lastSentence.value = "";

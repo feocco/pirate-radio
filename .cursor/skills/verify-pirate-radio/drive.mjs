@@ -179,7 +179,7 @@ async function queueChecks(page, state) {
   const submissions = page.locator("#submissions");
   await submissions.getByRole("heading", { name: expectedArticles[0].title }).waitFor();
   const submissionText = await submissions.innerText();
-  assert(submissionText.includes("succeeded"), "seeded submission is not succeeded");
+  assert(submissionText.includes("Succeeded"), "seeded submission is not Succeeded");
   assert(submissionText.includes("demo.reader"), "seeded submission is missing demo.reader");
   const queueResponse = await page.request.get(`${state.publicUrl}/queue.json`);
   const queueBody = await queueResponse.json();

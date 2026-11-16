@@ -124,7 +124,8 @@ X Articles use the official X Post lookup API and require
 `X_API_BEARER_TOKEN`; the public X page is not scraped.
 Unsupported `https` article URLs require `CURSOR_API_KEY` and launch a Cursor
 Cloud Agent against `feocco/pirate-radio` that writes `artifacts/story.json`.
-That extract agent does not open a pull request. Optional
+That agent is created with model id `grok-4.7` unless `PIRATE_RADIO_CLOUD_MODEL`
+names another Cursor model id. The extract agent does not open a pull request. Optional
 `--first-sentence` and `--last-sentence` pin the extract to inclusive anchors.
 A successful cloud extract records the host fingerprint in
 `cloud-hosts.json`. That write does not open an adapter PR.
