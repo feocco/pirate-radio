@@ -6,7 +6,7 @@ The queue page lists the local fixture feed and accepts a pasted URL. Conversion
 
 - `queue-form` shows the paste field, `Convert URL`, the custom-text form, and `Convert Text`.
 - `queue-feed` lists `Inside Micron's Attempts` from the local fixture feed with a `Convert` button.
-- `queue-submissions` lists the seeded articles as `succeeded` by `demo.reader`.
+- `queue-submissions` lists the seeded articles as `Succeeded` by `demo.reader`.
 - `queue-convert` submits the Harbor Lights fixture through `/queue` and opens the finished article. This sub-feature uses `npm run qa` only.
 
 ## How to get to it (user POV)
@@ -25,7 +25,7 @@ Preconditions:
 - **Open the queue.** Run `node .cursor/skills/verify-pirate-radio/drive.mjs queue`. The script signs in, chooses `Queue`, and waits for `#article-url`.
 - **See the form.** `#queue-url` reads `Convert URL`. `#custom-title` and `#queue-text` are visible. The script does not fill or submit either form.
 - **See the fixture row.** A `queue-row` heading reads `Inside Micron's Attempts` and that row has a `Convert` button. `Monday: Three Morning Takes` is absent because the voice filter drops it.
-- **See seeded history.** `#submissions` contains `The Quiet Return of the Generalist Engineer`, `succeeded`, and `demo.reader`.
+- **See seeded history.** `#submissions` contains `The Quiet Return of the Generalist Engineer`, `Succeeded`, and `demo.reader`.
 - **Read the JSON the page fetched.** The same command requests `GET /queue.json` and `GET /submissions.json` with the session. `queue.json` lists `Inside Micron's Attempts` with `converted` false and omits `Monday: Three Morning Takes`. `submissions.json` lists each seeded title with status `succeeded` and `submittedByUsername` `demo.reader`. The bodies are `<evidenceDir>/queue.json` and `<evidenceDir>/submissions.json`.
 - **Proof of the page.** `queue.png` shows the form and the Micron row. `Convert` has not been activated.
 - **Convert a fixture URL.** From the repo root, run `npm run qa`. Playwright opens `/auth/login?returnTo=/queue` as `qa.reader`, fills `#article-url` with the fixture origin `/p/<slug>`, chooses `#queue-url`, and waits until `#url-status` starts with `Queued.`. The article URL becomes `/article/<slug>`, `h1` is `Harbor Lights After Midnight`, `#story-body` contains the pier sentence and the ferry sentence, and `#article-player .shk-time_duration` is not `00:00`.

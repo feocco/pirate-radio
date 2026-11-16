@@ -25,11 +25,18 @@ import {
   buildArticleNotification,
   buildArticleReadyNotification,
   failureType,
+  publicFailureReason,
   type ArticleNotification,
   type PirateRadioDecision,
 } from "./notifications.js";
 import { HomelabFunctionsNotifier, type Notifier } from "./notifier.js";
-import { renderAdminHtml, renderArticleHtml, renderBacklogHtml, renderReaderHtml } from "./reader.js";
+import {
+  renderAdminHtml,
+  renderArticleHtml,
+  renderBacklogHtml,
+  renderReaderHtml,
+  submissionQueueText,
+} from "./reader.js";
 import { getPirateRadioOpenApiDocument, renderPirateRadioDocsHtml } from "./serviceDocs.js";
 import {
   baselineNewFeeds,
@@ -436,7 +443,11 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       return;
     }
     if (request.method === "GET" && (url.pathname === "/queue" || url.pathname === "/backlog")) {
-      html(response, renderBacklogHtml(principal.user, options.config.identitySettingsUrl));
+      html(response, renderBacklogHtml(
+        principal.user,
+        options.config.identitySettingsUrl,
+        await options.store.submissions(),
+      ));
       return;
     }
     if (request.method === "GET" && url.pathname === "/admin") {
@@ -472,7 +483,13 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
       return;
     }
     if (request.method === "GET" && url.pathname === "/submissions.json") {
-      json(response, 200, { version: 1, items: await options.store.submissions() });
+      json(response, 200, {
+        version: 1,
+        items: (await options.store.submissions()).map((item) => ({
+          ...item,
+          statusText: submissionQueueText(item),
+        })),
+      });
       return;
     }
     if (request.method === "POST" && queueConvertSlug(url.pathname)) {
@@ -498,7 +515,7 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
         writeState,
         startConversion: (queuedSlug) => decide(queuedSlug, "accept", submission.id),
       });
-      if (result.status === "missing") await options.store.updateSubmission(submission.id, "failed", { error: "missing" });
+      if (result.status === "missing") await options.store.updateSubmission(submission.id, "failed", { error: publicFailureReason("missing") });
       if (result.status === "converted") await options.store.updateSubmission(submission.id, "succeeded");
       json(response, result.status === "missing" ? 404 : 200, result);
       return;
@@ -525,7 +542,7 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
           writeState,
           startConversion: (queuedSlug) => decide(queuedSlug, "accept", submission.id),
         });
-        if (!result.ok) await options.store.updateSubmission(submission.id, "failed", { error: result.error });
+        if (!result.ok) await options.store.updateSubmission(submission.id, "failed", { error: publicFailureReason(result.error) });
         if (result.ok && result.status === "converted") await options.store.updateSubmission(submission.id, "succeeded", { slug: result.slug });
         json(response, result.ok ? 200 : 400, result);
       } catch {
@@ -570,7 +587,7 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
             await sendNotification(buildArticleReadyNotification(result.libraryItem, options.config.publicBaseUrl));
           })
           .catch(async (error) => {
-            await options.store.updateSubmission(submission.id, "failed", { error: error instanceof Error ? error.message : String(error) });
+            await options.store.updateSubmission(submission.id, "failed", { error: publicFailureReason(error) });
             await sendNotification(
               buildArticleFailureNotification(
                 {
@@ -752,12 +769,12 @@ function findArticleBySlug(state: PirateRadioState, slug: string) {
 
 function terminalSubmissionWrite(slug: string, outcome: DecisionOutcome): SubmissionWrite {
   if (!outcome.ok) {
-    return ["failed", { error: outcome.error instanceof Error ? outcome.error.message : String(outcome.error) }];
+    return ["failed", { error: publicFailureReason(outcome.error) }];
   }
   const update = { slug: outcome.result.libraryItem?.slug ?? slug };
   return outcome.result.status === "accepted"
     ? ["succeeded", update]
-    : ["failed", { ...update, error: outcome.result.status }];
+    : ["failed", { ...update, error: publicFailureReason(outcome.result.status) }];
 }
 
 function queueConvertSlug(pathname: string): string | undefined {

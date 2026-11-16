@@ -112,11 +112,37 @@ export function failureType(error: unknown): string {
   return error instanceof Error ? error.name : "Error";
 }
 
-function failureMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
+const SECRET_TEXT = /(?:crsr_[A-Za-z0-9_-]+|sk-[A-Za-z0-9_-]{8,}|bearer\s+\S+|api[_-]?key\s*[:=]\s*\S+)/gi;
+
+export function publicFailureReason(error: unknown): string {
+  const message = errorText(error);
+  const haystack = `${errorCode(error)} ${message}`.toLowerCase();
+  if (haystack.includes("usage_limit") || haystack.includes("usage limit")) {
+    return "Cursor usage limit reached";
   }
-  return String(error);
+  const redacted = message
+    .replace(SECRET_TEXT, "")
+    .replace(/\s+([.!?])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!redacted) return "Conversion failed.";
+  return redacted.length > 180 ? `${redacted.slice(0, 177)}...` : redacted;
+}
+
+function failureMessage(error: unknown): string {
+  return publicFailureReason(error);
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "";
+}
+
+function errorCode(error: unknown): string {
+  if (!error || typeof error !== "object" || !("code" in error)) return "";
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : "";
 }
 
 function isAuthRequiredError(error: unknown): boolean {

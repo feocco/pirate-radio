@@ -85,11 +85,20 @@ export function pirateRadioCloudCreateOptions(options: {
 
 export type CloudAgentFactory = (input: CloudAgentCreateInput) => Promise<CloudAgentHandle>;
 
+export const DEFAULT_CLOUD_AGENT_MODEL_ID = "grok-4.7";
+
 export function cursorApiKeyFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   const key = env.CURSOR_API_KEY?.trim();
   return key || undefined;
+}
+
+export function cloudAgentModelSelection(
+  env: NodeJS.ProcessEnv = process.env,
+): { id: string } {
+  const configured = env.PIRATE_RADIO_CLOUD_MODEL?.trim();
+  return { id: configured || DEFAULT_CLOUD_AGENT_MODEL_ID };
 }
 
 export function normalizeExtractAnchors(input: {
@@ -464,6 +473,7 @@ export async function createCursorSdkAgent(input: CloudAgentCreateInput): Promis
   const { Agent } = await import("@cursor/sdk");
   return Agent.create({
     apiKey: input.apiKey,
+    model: cloudAgentModelSelection(),
     cloud: input.cloud,
   });
 }
