@@ -33,8 +33,8 @@ The app reads configuration from environment variables.
 | `PIRATE_RADIO_CLOUD_MODEL` | `grok-4.7` | Model id passed to `Agent.create` for cloud extract and host-adapter agents. A blank value keeps `grok-4.7`. |
 | `HA_URL` | none | Home Assistant base URL. |
 | `HA_LONG_LIVED_TOKEN` | none | Home Assistant WebSocket token. |
-| `HOMELAB_FUNCTIONS_URL` | none | Notification broker URL. |
-| `HOMELAB_FUNCTIONS_TOKEN` | none | Notification broker bearer token. |
+| `HOMELAB_FUNCTIONS_URL` | none | Notification broker URL. Credit reports POST to `/v1/credits/report` on this origin. |
+| `HOMELAB_FUNCTIONS_TOKEN` | none | Notification broker bearer token. The same token authorizes credit reports. |
 | `PIRATE_RADIO_REAUTH_URL` | none | Tailnet-only login browser URL used in auth-required notifications. |
 
 Deployment-specific Compose, Tailnet exposure, monitoring, and real secrets

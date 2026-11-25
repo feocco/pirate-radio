@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { noteXaiSucceeded } from "./credits.js";
 import type { TimedWord } from "./tts/types.js";
 import { mapXaiHttpError, XAI_TIMEOUT_MS } from "./tts/xaiHttp.js";
 
@@ -56,6 +57,7 @@ async function transcribeWithXai(audioPath: string): Promise<AlignmentResult> {
   if (!response.ok) {
     throw mapXaiHttpError("stt", response.status, await response.text());
   }
+  noteXaiSucceeded();
 
   const payload = (await response.json()) as {
     words?: Array<{ text?: string; word?: string; start: number; end: number }>;

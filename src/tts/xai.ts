@@ -4,7 +4,9 @@ import { splitSpeechInput } from "./chunk.js";
 import { assertWithinBudget } from "./cost.js";
 import { wordsFromGraphTimestamps } from "./timestamps.js";
 import type { TimedWord, TtsProvider, TtsRequest, TtsResult } from "./types.js";
+import { noteXaiSucceeded } from "../credits.js";
 import {
+  isXaiCreditExhausted,
   mapXaiHttpError,
   nextChunkTimeOffset,
   XAI_TTS_RETRY_DELAYS_MS,
@@ -110,9 +112,14 @@ export class XaiTtsProvider implements TtsProvider {
       }
 
       if (result.kind === "audio") {
+        noteXaiSucceeded();
         return result.parsed;
       }
-      if (!isRetryableStatus(result.status) || attempt >= delays.length) {
+      if (
+        isXaiCreditExhausted(result.status, result.body) ||
+        !isRetryableStatus(result.status) ||
+        attempt >= delays.length
+      ) {
         throw mapXaiHttpError("tts", result.status, result.body);
       }
       await wait(delays[attempt] ?? 0);

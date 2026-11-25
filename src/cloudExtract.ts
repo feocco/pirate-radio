@@ -1,3 +1,4 @@
+import { cursorCreditExhausted, isCreditExhaustedError } from "./credits.js";
 import { isXHostname } from "./xArticle.js";
 import { sanitizeSlug, slugFromUrl } from "./slug.js";
 import type { Story, StoryContentBlock } from "./types.js";
@@ -45,7 +46,7 @@ export interface ParsedCloudExtract {
 export interface CloudAgentRunResult {
   status: "finished" | "error" | "cancelled" | string;
   result?: string;
-  error?: { message?: string };
+  error?: { message?: string; code?: string };
   git?: { branches?: Array<{ repoUrl?: string; branch?: string; prUrl?: string }> };
 }
 
@@ -290,33 +291,38 @@ export async function extractStoryViaCloud(
   let agent: CloudAgentHandle | undefined;
   try {
     return await withCloudAgentTimeout(async () => {
-      agent = await createAgent({
-        apiKey,
-        cloud: pirateRadioCloudCreateOptions(),
-      });
-      const run = await agent.send(buildCloudExtractPrompt(request));
-      const result = await run.wait();
-      if (result.status !== "finished") {
-        throw new Error(result.error?.message || CLOUD_EXTRACT_FAILURE_MESSAGE);
-      }
-
-      const artifactPath = pickStoryArtifactPath(await agent.listArtifacts());
-      if (!artifactPath) {
-        throw new Error("Cloud extract finished without a Story JSON artifact.");
-      }
-
-      let raw: unknown;
       try {
-        raw = JSON.parse(decodeArtifactBytes(await agent.downloadArtifact(artifactPath)));
-      } catch (error) {
-        throw new Error(
-          error instanceof Error && error.message.includes("JSON")
-            ? error.message
-            : "Cloud extract artifact is not valid JSON.",
-        );
-      }
+        agent = await createAgent({
+          apiKey,
+          cloud: pirateRadioCloudCreateOptions(),
+        });
+        const run = await agent.send(buildCloudExtractPrompt(request));
+        const result = await run.wait();
+        if (result.status !== "finished") {
+          raiseCloudFailure(result.error ?? CLOUD_EXTRACT_FAILURE_MESSAGE, CLOUD_EXTRACT_FAILURE_MESSAGE);
+        }
 
-      return parseCloudExtractArtifact(raw, request.url, request.anchors, options.now);
+        const artifactPath = pickStoryArtifactPath(await agent.listArtifacts());
+        if (!artifactPath) {
+          throw new Error("Cloud extract finished without a Story JSON artifact.");
+        }
+
+        const bytes = await agent.downloadArtifact(artifactPath);
+        let raw: unknown;
+        try {
+          raw = JSON.parse(decodeArtifactBytes(bytes));
+        } catch (error) {
+          throw new Error(
+            error instanceof Error && error.message.includes("JSON")
+              ? error.message
+              : "Cloud extract artifact is not valid JSON.",
+          );
+        }
+
+        return parseCloudExtractArtifact(raw, request.url, request.anchors, options.now);
+      } catch (error) {
+        raiseCloudFailure(error, CLOUD_EXTRACT_FAILURE_MESSAGE);
+      }
     }, { timeoutMs: options.timeoutMs });
   } finally {
     agent?.close();
@@ -430,36 +436,40 @@ export async function proposeHostAdapter(input: {
   let agent: CloudAgentHandle | undefined;
   try {
     return await withCloudAgentTimeout(async () => {
-      agent = await createAgent({
-        apiKey,
-        cloud: pirateRadioCloudCreateOptions({
-          repoUrl: input.repoUrl,
-          autoCreatePR: true,
-        }),
-      });
-      const run = await agent.send(
-        buildHostAdapterPrompt({
+      try {
+        agent = await createAgent({
+          apiKey,
+          cloud: pirateRadioCloudCreateOptions({
+            repoUrl: input.repoUrl,
+            autoCreatePR: true,
+          }),
+        });
+        const run = await agent.send(
+          buildHostAdapterPrompt({
+            host,
+            sourceUrl: existing?.lastSourceUrl,
+            fingerprint: existing?.fingerprint,
+          }),
+        );
+        const result = await run.wait();
+        if (result.status !== "finished") {
+          raiseCloudFailure(result.error ?? "Host adapter agent failed.", "Host adapter agent failed.");
+        }
+        const prUrl = result.git?.branches?.find((branch) => branch.prUrl)?.prUrl;
+        const record = await markCloudHostAdapterRequested({
+          libraryDir: input.libraryDir,
           host,
-          sourceUrl: existing?.lastSourceUrl,
-          fingerprint: existing?.fingerprint,
-        }),
-      );
-      const result = await run.wait();
-      if (result.status !== "finished") {
-        throw new Error(result.error?.message || "Host adapter agent failed.");
+          agentId: agent.agentId,
+          ...(prUrl ? { prUrl } : {}),
+        });
+        return {
+          host: record.host,
+          ...(record.adapterAgentId ? { agentId: record.adapterAgentId } : {}),
+          ...(record.adapterPrUrl ? { prUrl: record.adapterPrUrl } : {}),
+        };
+      } catch (error) {
+        raiseCloudFailure(error, "Host adapter agent failed.");
       }
-      const prUrl = result.git?.branches?.find((branch) => branch.prUrl)?.prUrl;
-      const record = await markCloudHostAdapterRequested({
-        libraryDir: input.libraryDir,
-        host,
-        agentId: agent.agentId,
-        ...(prUrl ? { prUrl } : {}),
-      });
-      return {
-        host: record.host,
-        ...(record.adapterAgentId ? { agentId: record.adapterAgentId } : {}),
-        ...(record.adapterPrUrl ? { prUrl: record.adapterPrUrl } : {}),
-      };
     }, {
       timeoutMs: input.timeoutMs,
       timeoutMessage: HOST_ADAPTER_TIMEOUT_MESSAGE,
@@ -467,6 +477,18 @@ export async function proposeHostAdapter(input: {
   } finally {
     agent?.close();
   }
+}
+
+function raiseCloudFailure(error: unknown, fallback: string): never {
+  if (!isCreditExhaustedError(error)) {
+    const credit = cursorCreditExhausted(error);
+    if (credit) throw credit;
+  }
+  if (error instanceof Error) throw error;
+  const message = error && typeof error === "object" && "message" in error && typeof error.message === "string"
+    ? error.message.trim()
+    : typeof error === "string" ? error.trim() : "";
+  throw new Error(message || fallback);
 }
 
 export async function createCursorSdkAgent(input: CloudAgentCreateInput): Promise<CloudAgentHandle> {
