@@ -46,7 +46,7 @@ export interface ParsedCloudExtract {
 export interface CloudAgentRunResult {
   status: "finished" | "error" | "cancelled" | string;
   result?: string;
-  error?: { message?: string };
+  error?: { message?: string; code?: string };
   git?: { branches?: Array<{ repoUrl?: string; branch?: string; prUrl?: string }> };
 }
 
@@ -299,7 +299,7 @@ export async function extractStoryViaCloud(
         const run = await agent.send(buildCloudExtractPrompt(request));
         const result = await run.wait();
         if (result.status !== "finished") {
-          raiseCloudFailure(result.error?.message || CLOUD_EXTRACT_FAILURE_MESSAGE, CLOUD_EXTRACT_FAILURE_MESSAGE);
+          raiseCloudFailure(result.error ?? CLOUD_EXTRACT_FAILURE_MESSAGE, CLOUD_EXTRACT_FAILURE_MESSAGE);
         }
 
         const artifactPath = pickStoryArtifactPath(await agent.listArtifacts());
@@ -307,9 +307,10 @@ export async function extractStoryViaCloud(
           throw new Error("Cloud extract finished without a Story JSON artifact.");
         }
 
+        const bytes = await agent.downloadArtifact(artifactPath);
         let raw: unknown;
         try {
-          raw = JSON.parse(decodeArtifactBytes(await agent.downloadArtifact(artifactPath)));
+          raw = JSON.parse(decodeArtifactBytes(bytes));
         } catch (error) {
           throw new Error(
             error instanceof Error && error.message.includes("JSON")
@@ -452,7 +453,7 @@ export async function proposeHostAdapter(input: {
         );
         const result = await run.wait();
         if (result.status !== "finished") {
-          raiseCloudFailure(result.error?.message || "Host adapter agent failed.", "Host adapter agent failed.");
+          raiseCloudFailure(result.error ?? "Host adapter agent failed.", "Host adapter agent failed.");
         }
         const prUrl = result.git?.branches?.find((branch) => branch.prUrl)?.prUrl;
         const record = await markCloudHostAdapterRequested({
@@ -484,8 +485,10 @@ function raiseCloudFailure(error: unknown, fallback: string): never {
     if (credit) throw credit;
   }
   if (error instanceof Error) throw error;
-  if (typeof error === "string" && error.trim()) throw new Error(error);
-  throw new Error(fallback);
+  const message = error && typeof error === "object" && "message" in error && typeof error.message === "string"
+    ? error.message.trim()
+    : typeof error === "string" ? error.trim() : "";
+  throw new Error(message || fallback);
 }
 
 export async function createCursorSdkAgent(input: CloudAgentCreateInput): Promise<CloudAgentHandle> {

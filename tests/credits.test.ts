@@ -405,6 +405,57 @@ describe("Cursor usage limit", () => {
     expect(JSON.stringify(broker.reports[0])).not.toContain(CURSOR_KEY);
   });
 
+  test("a finished run whose error code is usage_limit is a Cursor credit error", async () => {
+    const createAgent: CloudAgentFactory = async () => ({
+      send: async () => ({
+        wait: async () => ({
+          status: "error",
+          error: { code: "PRO_USER_USAGE_LIMIT", message: "The run stopped." },
+        }),
+      }),
+      listArtifacts: async () => [],
+      downloadArtifact: async () => new Uint8Array(),
+      close: vi.fn(),
+    });
+
+    const error = await extractStoryViaCloud(
+      { url: SOURCE_URL },
+      { apiKey: "crsr_test", createAgent },
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({
+      name: "CreditExhaustedError",
+      provider: "cursor",
+      message: "paused: Cursor out of credits",
+    });
+    expect((error as Error).message).not.toContain("Cloud extract failed");
+  });
+
+  test("an artifact download that hits the usage limit is not reported as bad JSON", async () => {
+    const createAgent: CloudAgentFactory = async () => ({
+      send: async () => ({
+        wait: async () => ({ status: "finished" }),
+      }),
+      listArtifacts: async () => [{ path: "artifacts/story.json" }],
+      downloadArtifact: async () => {
+        throw new Error("Monthly additional usage limit reached.");
+      },
+      close: vi.fn(),
+    });
+
+    const error = await extractStoryViaCloud(
+      { url: SOURCE_URL },
+      { apiKey: "crsr_test", createAgent },
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({
+      name: "CreditExhaustedError",
+      provider: "cursor",
+      message: "paused: Cursor out of credits",
+    });
+    expect((error as Error).message).not.toContain("not valid JSON");
+  });
+
   test("a thrown Cursor usage_limit_exceeded error uses the same credit error", async () => {
     const createAgent: CloudAgentFactory = async () => {
       const error = new Error("usage_limit_exceeded") as Error & { code?: string };
@@ -458,6 +509,8 @@ describe("credit errors on the queue", () => {
     });
     expect(result.ttsCalls).toBe(1);
     expect(result.notifications).toEqual([]);
+    expect(result.submissionsHtml).toContain("Failed. paused: xAI out of credits");
+    expect(result.submissionsHtml).not.toContain("Pirate Radio Failed");
     expect(result.reports.map((report) => report.kind)).toEqual(["error"]);
     expect(result.reports[0]).toMatchObject({
       provider: "xai",
@@ -537,6 +590,7 @@ describe("credit errors on the queue", () => {
       error: "xAI tts failed (403)",
     });
     expect(result.notifications.map((notification) => notification.title)).toEqual(["Pirate Radio Failed"]);
+    expect(result.submissionsHtml).toContain("Failed. xAI tts failed (403)");
     expect(result.reports).toEqual([]);
   });
 });
@@ -601,7 +655,17 @@ async function convertText(body: string, status: number) {
       expect(submission?.status).toBe("failed");
       expect(queue.notifications.length + queue.reports.length).toBeGreaterThan(0);
     });
-    return { submission, notifications: queue.notifications, reports: queue.reports, ttsCalls: queue.ttsCalls() };
+    const page = await fetch(`${queue.baseUrl}/queue`);
+    const html = await page.text();
+    const submissionsStart = html.indexOf('id="submissions"');
+    const submissionsHtml = html.slice(submissionsStart, html.indexOf("</main>", submissionsStart));
+    return {
+      submission,
+      notifications: queue.notifications,
+      reports: queue.reports,
+      ttsCalls: queue.ttsCalls(),
+      submissionsHtml,
+    };
   } finally {
     await queue.stop();
   }
