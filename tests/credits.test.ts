@@ -1,13 +1,15 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, describe, expect, test, vi } from "vitest";
 import { writeAlignment } from "../src/alignment.js";
 import { proposeHostAdapter, extractStoryViaCloud, type CloudAgentFactory } from "../src/cloudExtract.js";
+import { resetCreditReporter } from "../src/credits.js";
 import type { PirateRadioConfig } from "../src/config.js";
 import type { PirateRadioDatabase } from "../src/database.js";
 import { XaiTtsProvider } from "../src/tts/xai.js";
+import type { Story } from "../src/types.js";
 import { extractXArticleFromUrl } from "../src/xArticle.js";
 import { FakeAuthenticator, MemoryStore } from "./support/fakes.js";
 
@@ -37,6 +39,9 @@ const savedEnv = {
 
 const harness = vi.hoisted(() => ({
   servers: [] as Server[],
+  extractStory: vi.fn(async (_url: string, _options?: unknown): Promise<Story> => {
+    throw new Error("extract unused");
+  }),
 }));
 
 vi.mock("node:http", async (importOriginal) => {
@@ -51,6 +56,14 @@ vi.mock("node:http", async (importOriginal) => {
   };
 });
 
+vi.mock("../src/browser.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/browser.js")>();
+  return {
+    ...actual,
+    extractStoryFromUrl: (...args: Parameters<typeof actual.extractStoryFromUrl>) => harness.extractStory(...args),
+  };
+});
+
 vi.mock("../src/feed.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/feed.js")>();
   return {
@@ -59,18 +72,15 @@ vi.mock("../src/feed.js", async (importOriginal) => {
   };
 });
 
-afterEach(async () => {
+afterEach(() => {
   restoreEnv("HOMELAB_FUNCTIONS_URL", savedEnv.homelabUrl);
   restoreEnv("HOMELAB_FUNCTIONS_TOKEN", savedEnv.homelabToken);
   restoreEnv("XAI_API_KEY", savedEnv.xaiKey);
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  try {
-    const credits = await import("../src/credits.js") as { resetCreditReporter?: () => void };
-    credits.resetCreditReporter?.();
-  } catch {
-    // The reporter module arrives with the classification fix.
-  }
+  harness.extractStory.mockReset();
+  harness.extractStory.mockRejectedValue(new Error("extract unused"));
+  resetCreditReporter();
 });
 
 afterAll(async () => {
@@ -459,6 +469,67 @@ describe("credit errors on the queue", () => {
     expect(JSON.stringify(result.reports[0])).not.toContain(KEY);
   });
 
+  test("accepting a pending article skips the failure push, keeps the article pending, and can be accepted again", async () => {
+    const slug = "credit-feed-story";
+    const sourceUrl = "https://example.com/p/credit-feed-story";
+    harness.extractStory.mockResolvedValue({
+      sourceUrl,
+      title: "Credit Feed Story",
+      text: "Hello from the feed.",
+      wordCount: 4,
+      characterCount: 21,
+      extractedAt: "2026-11-20T00:00:00.000Z",
+    });
+    const queue = await startQueue(XAI_CREDIT_BODY, 403, async (statePath) => {
+      await mkdir(join(statePath, ".."), { recursive: true });
+      await writeFile(statePath, JSON.stringify({
+        initialized: true,
+        initializedFeedIds: ["local"],
+        seen: {},
+        pending: {
+          [slug]: {
+            id: sourceUrl,
+            title: "Credit Feed Story",
+            url: sourceUrl,
+            author: "",
+            publishedAt: "",
+            description: "",
+            slug,
+          },
+        },
+        approved: {},
+        skipped: {},
+      }));
+    });
+    try {
+      const accept = async () => {
+        const response = await fetch(`${queue.baseUrl}/simulate/accept/${slug}`, {
+          method: "POST",
+          headers: { origin: "http://127.0.0.1" },
+        });
+        expect(response.status).toBe(200);
+      };
+      await accept();
+      await accept();
+
+      const submissions = await fetch(`${queue.baseUrl}/submissions.json`);
+      const payload = (await submissions.json()) as { items: Array<Record<string, unknown>> };
+      const failed = payload.items.filter((item) => item.title === "Credit Feed Story");
+      expect(failed).toHaveLength(2);
+      expect(failed.every((item) => item.status === "failed" && item.error === "paused: xAI out of credits")).toBe(true);
+      expect(queue.notifications).toEqual([]);
+      expect(queue.ttsCalls()).toBe(2);
+      const state = JSON.parse(await readFile(queue.statePath, "utf8")) as {
+        pending: Record<string, unknown>;
+        approved: Record<string, unknown>;
+      };
+      expect(state.pending[slug]).toMatchObject({ title: "Credit Feed Story" });
+      expect(state.approved).toEqual({});
+    } finally {
+      await queue.stop();
+    }
+  });
+
   test("a generic xAI 403 still sends Pirate Radio Failed", async () => {
     const result = await convertText(GENERIC_XAI_BODY, 403);
     expect(result.submission).toMatchObject({
@@ -510,6 +581,33 @@ function installBroker(options: { fail?: boolean } = {}) {
 }
 
 async function convertText(body: string, status: number) {
+  const queue = await startQueue(body, status);
+  try {
+    const queued = await fetch(`${queue.baseUrl}/queue/convert-text`, {
+      method: "POST",
+      headers: {
+        origin: "http://127.0.0.1",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ title: "Credit story", text: "Hello from the queue." }),
+    });
+    expect(await queued.json()).toMatchObject({ ok: true, status: "queued" });
+
+    let submission: Record<string, unknown> | undefined;
+    await vi.waitFor(async () => {
+      const response = await fetch(`${queue.baseUrl}/submissions.json`);
+      const payload = (await response.json()) as { items: Array<Record<string, unknown>> };
+      submission = payload.items.find((item) => item.title === "Credit story");
+      expect(submission?.status).toBe("failed");
+      expect(queue.notifications.length + queue.reports.length).toBeGreaterThan(0);
+    });
+    return { submission, notifications: queue.notifications, reports: queue.reports, ttsCalls: queue.ttsCalls() };
+  } finally {
+    await queue.stop();
+  }
+}
+
+async function startQueue(body: string, status: number, prepare?: (statePath: string) => Promise<void>) {
   process.env.HOMELAB_FUNCTIONS_URL = BROKER;
   process.env.HOMELAB_FUNCTIONS_TOKEN = "test-token";
   process.env.XAI_API_KEY = "test-xai-key";
@@ -535,10 +633,12 @@ async function convertText(body: string, status: number) {
   const intervalSpy = vi
     .spyOn(globalThis, "setInterval")
     .mockImplementation((() => ({ unref() {} })) as unknown as typeof setInterval);
+  const config = queueConfig(dir);
+  await prepare?.(config.statePath);
   const { PirateRadioService } = await import("../src/server.js");
   const notifications: Array<{ title: string; message: string }> = [];
   const service = new PirateRadioService({
-    config: queueConfig(dir),
+    config,
     database: new QueueStore() as unknown as PirateRadioDatabase,
     authenticator: new FakeAuthenticator(),
     notifier: {
@@ -548,36 +648,23 @@ async function convertText(body: string, status: number) {
     },
   });
   const before = harness.servers.length;
-  try {
-    await service.start();
-    const server = harness.servers[before];
-    expect(server).toBeDefined();
-    await vi.waitFor(() => expect(server!.listening).toBe(true));
-    const address = server!.address();
-    if (!address || typeof address === "string") throw new Error("Expected a TCP port");
-    const queued = await fetch(`http://127.0.0.1:${address.port}/queue/convert-text`, {
-      method: "POST",
-      headers: {
-        origin: "http://127.0.0.1",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ title: "Credit story", text: "Hello from the queue." }),
-    });
-    expect(await queued.json()).toMatchObject({ ok: true, status: "queued" });
-
-    let submission: Record<string, unknown> | undefined;
-    await vi.waitFor(async () => {
-      const response = await fetch(`http://127.0.0.1:${address.port}/submissions.json`);
-      const payload = (await response.json()) as { items: Array<Record<string, unknown>> };
-      submission = payload.items.find((item) => item.title === "Credit story");
-      expect(submission?.status).toBe("failed");
-      expect(notifications.length + reports.length).toBeGreaterThan(0);
-    });
-    return { submission, notifications, reports, ttsCalls };
-  } finally {
-    intervalSpy.mockRestore();
-    await rm(dir, { recursive: true, force: true });
-  }
+  await service.start();
+  const server = harness.servers[before];
+  if (!server) throw new Error("Expected the queue server to start");
+  await vi.waitFor(() => expect(server.listening).toBe(true));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Expected a TCP port");
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    statePath: config.statePath,
+    notifications,
+    reports,
+    ttsCalls: () => ttsCalls,
+    stop: async () => {
+      intervalSpy.mockRestore();
+      await rm(dir, { recursive: true, force: true });
+    },
+  };
 }
 
 class QueueStore extends MemoryStore {

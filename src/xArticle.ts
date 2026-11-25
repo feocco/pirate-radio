@@ -1,7 +1,9 @@
+import { creditExhausted } from "./credits.js";
 import type { Story, StoryContentBlock } from "./types.js";
 
 const X_API_BASE_URL = "https://api.x.com";
 const X_API_FETCH_TIMEOUT_MS = 15_000;
+const X_CREDIT_PHRASE = /spend[\s-]?cap|\bcredits?\b/i;
 const X_HOSTNAMES = new Set([
   "x.com",
   "www.x.com",
@@ -94,7 +96,14 @@ export async function extractXArticleFromUrl(
     },
     signal: AbortSignal.timeout(X_API_FETCH_TIMEOUT_MS),
   });
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
+    throw new Error("X API authentication failed. Check X_API_BEARER_TOKEN.");
+  }
+  if (response.status === 402 || response.status === 403) {
+    const body = await response.text();
+    if (response.status === 402 || X_CREDIT_PHRASE.test(body)) {
+      throw creditExhausted({ provider: "x", status: response.status, body });
+    }
     throw new Error("X API authentication failed. Check X_API_BEARER_TOKEN.");
   }
   if (response.status === 429) {

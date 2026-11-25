@@ -15,6 +15,7 @@ import { fetchArticleFeeds, detectNewArticles } from "./feed.js";
 import { extractStoryFromUrl } from "./browser.js";
 import { queueHostAdapterProposal } from "./cloudExtract.js";
 import { OidcAuthenticator, ForbiddenIdentityError, originAllowed, sendAuthenticationRequired, type AuthenticatedRequest, type Authenticator } from "./auth.js";
+import { configureCreditReporter, isCreditExhaustedError } from "./credits.js";
 import { validateIdentityConfig, type PirateRadioConfig } from "./config.js";
 import { PirateRadioDatabase, type PirateRadioStore } from "./database.js";
 import { HomeAssistantActionListener } from "./haActions.js";
@@ -110,6 +111,10 @@ export class PirateRadioService {
   private authenticator?: Authenticator;
 
   constructor(private readonly options: PirateRadioServiceOptions) {
+    configureCreditReporter({
+      serviceUrl: options.config.homelabFunctionsUrl,
+      token: options.config.homelabFunctionsToken,
+    });
     this.notifier =
       options.notifier ??
       new HomelabFunctionsNotifier({
@@ -318,6 +323,7 @@ export class PirateRadioService {
   }
 
   private async notifyArticleFailure(slug: string, error: unknown): Promise<void> {
+    if (isCreditExhaustedError(error)) return;
     const state = await this.getState();
     const article = findArticleBySlug(state, slug);
     if (!article) {
@@ -588,6 +594,7 @@ export function createPirateRadioRequestHandler(options: PirateRadioRequestHandl
           })
           .catch(async (error) => {
             await options.store.updateSubmission(submission.id, "failed", { error: publicFailureReason(error) });
+            if (isCreditExhaustedError(error)) return;
             await sendNotification(
               buildArticleFailureNotification(
                 {
